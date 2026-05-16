@@ -1,0 +1,249 @@
+version: '3.8'
+
+networks:
+  nudgebee:
+
+volumes:
+  pg_data:
+  clickhouse_data:
+  rabbitmq_data:
+  redis_data:
+  qdrant_data:
+
+services:
+  # ---------- Infra ----------
+  postgres:
+    image: postgres:16
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: nudgebee
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    environment:
+      CLICKHOUSE_DB: nudgebee
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: clickhousepassword
+
+  redis:
+    image: redis:7-alpine
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.0
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  temporal:
+    image: temporalio/auto-setup:1.29.1
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "7233:7233"
+    depends_on:
+      - postgres
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_SEEDS: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PWD: postgrespassword
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+
+  temporal-ui:
+    image: temporalio/ui:2.44.0
+    networks: [nudgebee]
+    restart: unless-stopped
+    ports:
+      - "8233:8080"
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+
+  # ---------- Go services ----------
+  api-server-services:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-services-server:2026-05-04T12-46-22_b893b513f3d7d0968b5b65823055edc81203b00a
+    networks: [nudgebee]
+    ports:
+      - "8000:8000"
+    env_file: ./api-server/services/.env
+    depends_on:
+      - postgres
+      - rabbitmq
+      - clickhouse
+      - redis
+
+  ticket-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-ticket-server:2026-04-29T13-31-46_93d83afaedb86b342de7a4e2edd7dd18dc568bc7
+    networks: [nudgebee]
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  cloud-collector:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-cloud-collector-server:2026-05-04T11-05-31_e8442799cd2dbb1f328a18494eac4aba5b821e67
+    networks: [nudgebee]
+    ports:
+      - "8002:8000"
+    depends_on:
+      - rabbitmq
+      - clickhouse
+
+  otel-collector:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-otel-collector-server:2025-11-25T08-31-10_dc2e5b31a7223f1ebe04d53415d700cbce4d76cb
+    networks: [nudgebee]
+    ports:
+      - "8003:8000"
+    depends_on:
+      - clickhouse
+
+  relay-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-relay-server:2026-04-29T08-20-53_
+    networks: [nudgebee]
+    ports:
+      - "8004:8080"
+    depends_on:
+      - rabbitmq
+
+  llm-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-llm-server:2026-05-04T14-32-57_749683dce47034b5e066d834198e4b1e1d8c532a
+    networks: [nudgebee]
+    ports:
+      - "8005:8000"
+    depends_on:
+      - postgres
+      - qdrant
+
+  code-analysis:
+    image: code-analysis  # TODO: build locally — no published image
+    networks: [nudgebee]
+    ports:
+      - "8006:8080"
+
+  workflow-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-workflow-server:2026-05-04T04-51-18_da1e843d3d71fd6c48252b0cfc74026db2d2b175
+    networks: [nudgebee]
+    ports:
+      - "8007:8000"
+    environment:
+      TEMPORAL_GRPC_ENDPOINT: temporal:7233
+    depends_on:
+      - postgres
+      - rabbitmq
+      - temporal
+
+  # ---------- Python services ----------
+  k8s-collector-app:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-k8s-collector:2026-04-30T08-43-19_278af52f24b38b84067329fc67797f16c1afc6c8
+    networks: [nudgebee]
+    ports:
+      - "5000:5000"
+    depends_on:
+      - rabbitmq
+      - clickhouse
+
+  rag-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-rag-server:2026-04-28T16-25-13_
+    networks: [nudgebee]
+    ports:
+      - "9998:9999"
+    depends_on:
+      - qdrant
+      - postgres
+
+  ml-k8s-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-ml-k8s-server:2026-04-28T16-17-16_632b0911e2172cef42d7ae7d379f33c57143ba4e
+    networks: [nudgebee]
+    ports:
+      - "9999:9999"
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - clickhouse
+
+  notifications-server:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-notifications:2026-05-04T07-09-04_b5b6ac3518aee4d5cba6ecbd475f824ee62c29fa
+    networks: [nudgebee]
+    ports:
+      - "8090:8080"
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  services-sidecar:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-services-server:2026-05-04T12-46-22_b893b513f3d7d0968b5b65823055edc81203b00a
+    networks: [nudgebee]
+    depends_on:
+      - api-server-services
+
+  # ---------- Frontend ----------
+  app:
+    platform: linux/amd64
+    image: registry.nudgebee.com/nudgebee-app:0.98.0-snapshot-20260504100239-3711f7c
+    networks: [nudgebee]
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-server-services
+    env_file:
+      - ./app/.env
+    environment:
+      SERVICE_API_SERVER_URL: http://api-server-services:8000
+      LLM_SERVER_URL: http://llm-server:8000
