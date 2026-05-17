@@ -247,6 +247,53 @@ changes, no other-branch contamination.
 ### 4. Apply OSS cleanup
 
 ```bash
+# ── EE-content strip ────────────────────────────────────────────────
+# Forward-looking: as the EE/OSS separation design lands on the
+# enterprise side (see internal `docs/ee/licensing-and-tiering.md`),
+# EE-only code will live under `ee/` subtrees within each module, and
+# `.oss-exclude` at the repo root will list every path that must not
+# ship to OSS. The drop process applies that contract here.
+#
+# All three blocks below are idempotent — they're no-ops on the
+# current snapshot (which has no `.oss-exclude`, no `ee/` subtrees,
+# and no boundary script). They become load-bearing the moment the
+# first EE/OSS-separation PR merges to enterprise/main.
+
+# Block 1: strip every path listed in .oss-exclude. The file is the
+# canonical contract — EE side owns it, drop side honours it.
+if [ -f .oss-exclude ]; then
+  while IFS= read -r line; do
+    line="${line%%#*}"             # strip inline comments
+    line="$(echo "$line" | xargs)" # trim whitespace
+    [ -z "$line" ] && continue
+    rm -rf "$line"
+  done < .oss-exclude
+fi
+
+# Block 2: defense-in-depth strips that do NOT depend on .oss-exclude.
+# These paths must never appear in OSS even if someone forgets to list
+# them on the EE side. `docs/ee/` contains the licensing/tiering
+# design doc (competitive intel, license claim shape, threat model)
+# and is the highest-sensitivity directory.
+rm -rf docs/ee
+
+# Block 3: run the boundary check on the post-strip tree. Proves that
+# no surviving non-EE file imports an `/ee/` path (catches transitive
+# leakage that a raw EE-main scan would miss because the ee/ subtrees
+# are still present there). The script ships from the EE side; if it
+# hasn't landed yet, skip.
+if [ -x scripts/check-oss-boundary.sh ]; then
+  scripts/check-oss-boundary.sh
+fi
+
+# Block 4: strip the EE-only drop tooling itself. `.oss-exclude` and
+# the boundary-check script have no purpose in OSS — they describe
+# the EE→OSS contract, not the OSS deployment.
+rm -f .oss-exclude scripts/check-oss-boundary.sh
+rm -f .github/workflows/oss-boundary.yaml
+
+# ── Existing OSS cleanup continues below ────────────────────────────
+
 # Drift check: before applying the overlay, compare the just-extracted
 # snapshot (working tree) against the OSS version we're about to
 # restore (HEAD). Group-A files (pure OSS-only — don't exist upstream)
