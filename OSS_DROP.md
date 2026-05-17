@@ -254,10 +254,10 @@ changes, no other-branch contamination.
 # `.oss-exclude` at the repo root will list every path that must not
 # ship to OSS. The drop process applies that contract here.
 #
-# All three blocks below are idempotent — they're no-ops on the
-# current snapshot (which has no `.oss-exclude`, no `ee/` subtrees,
-# and no boundary script). They become load-bearing the moment the
-# first EE/OSS-separation PR merges to enterprise/main.
+# All blocks below are idempotent — they're no-ops on the current
+# snapshot (which has no `.oss-exclude`, no `ee/` subtrees, and no
+# boundary script). They become load-bearing the moment the first
+# EE/OSS-separation PR merges to enterprise/main.
 
 # Block 1: strip every path listed in .oss-exclude. The file is the
 # canonical contract — EE side owns it, drop side honours it.
@@ -268,6 +268,34 @@ if [ -f .oss-exclude ]; then
     [ -z "$line" ] && continue
     rm -rf "$line"
   done < .oss-exclude
+fi
+
+# Block 1.5: surgical strip of EE blank-imports — the companion
+# patches documented in the .oss-exclude footer. The Go entry-point
+# and the Next.js _app.tsx each have one EE-only side-effect import
+# that the boundary script *whitelists* (so EE-side CI doesn't yell
+# at legitimate EE devs). That whitelist means a silent sed miss
+# here would NOT trip block 3 — the OSS snapshot would ship with
+# broken imports pointing at packages block 1 just deleted. Hence
+# the grep assertions: if the strip didn't fully scrub, fail loud.
+#
+# Regex notes:
+# - Go path `[^"]*` is intentionally wide (subpackages, digits,
+#   underscores all legal in Go import paths).
+# - `;\?` lets the TS strip survive `semi: false` prettier configs.
+if [ -f api-server/services/cmd/main.go ]; then
+  sed -i '' '\,_ "nudgebee/services/ee/[^"]*",d' \
+      api-server/services/cmd/main.go
+  if grep -q '"nudgebee/services/ee/' api-server/services/cmd/main.go; then
+    echo "❌ EE blank-import survived strip in cmd/main.go"; exit 1
+  fi
+fi
+if [ -f app/src/pages/_app.tsx ]; then
+  sed -i '' "\,^import ['\"]@ee/init['\"];\?,d" \
+      app/src/pages/_app.tsx
+  if grep -q "@ee/" app/src/pages/_app.tsx; then
+    echo "❌ @ee/ import survived strip in _app.tsx"; exit 1
+  fi
 fi
 
 # Block 2: defense-in-depth strips that do NOT depend on .oss-exclude.
