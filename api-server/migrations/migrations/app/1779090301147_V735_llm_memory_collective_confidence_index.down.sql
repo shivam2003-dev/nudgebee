@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_collective_tenant_confidence_updated;
