@@ -14,7 +14,7 @@ the next section).
 Before your first pull request can be merged, you must sign the
 **[Nudgebee Contributor License Agreement](./CLA.md)**. The CLA
 confirms that you own the rights to your contribution and grants
-Nudgebee, Inc. the necessary copyright and patent licenses to
+Nudgebee CloudXP Pvt Ltd the necessary copyright and patent licenses to
 incorporate it into the project.
 
 Signing is a one-time, one-click step:

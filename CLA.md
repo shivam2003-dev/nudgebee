@@ -1,7 +1,7 @@
 # Nudgebee Contributor License Agreement
 
 Thank you for your interest in contributing to software projects
-managed by **Nudgebee, Inc.** ("Nudgebee").
+managed by **Nudgebee CloudXP Pvt Ltd** ("Nudgebee").
 
 This Contributor License Agreement ("Agreement") documents the rights
 granted by contributors to Nudgebee. It is adapted from the Apache

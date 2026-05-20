@@ -515,8 +515,9 @@ moment the repo flips public:
          `cla-assistant[bot]`, any internal bots).
       4. Add `license/cla` to required status checks in branch
          protection on `main`.
-- [ ] **Replace `Nudgebee, Inc.` placeholder** in `CLA.md` with the
-      final legal entity name (counsel review).
+- [x] ~~Replace `Nudgebee, Inc.` placeholder in `CLA.md` with the
+      final legal entity name~~ — done 2026-05-19, set to
+      **Nudgebee CloudXP Pvt Ltd** in both `CLA.md` and `CONTRIBUTING.md`.
 - [ ] **Remove `OSS_DROP.md`** from the repo (this file is dry-run
       scaffolding only).
 - [ ] **Re-enable Dependabot** by removing the
