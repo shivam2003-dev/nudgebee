@@ -53,8 +53,6 @@ jobs:
           - { image: services-server,         context: api-server/services,                              platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: services-server-sidecar, context: api-server/services/sidecar,                      platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
           - { image: services-server-sidecar, context: api-server/services/sidecar,                      platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
-          - { image: hasura-migrations,       context: api-server/hasura,                                platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
-          - { image: hasura-migrations,       context: api-server/hasura,                                platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: app,                     context: app,                                              platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
           - { image: app,                     context: app,                                              platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: ticket-server,           context: ticket-server,                                    platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
@@ -67,8 +65,6 @@ jobs:
           - { image: k8s-collector,           context: collector-server/k8s-collector/app,               platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: cloud-collector-server,  context: collector-server/cloud-collector,                 platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
           - { image: cloud-collector-server,  context: collector-server/cloud-collector,                 platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
-          - { image: otel-collector-server,   context: collector-server/otel-collector,                  platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
-          - { image: otel-collector-server,   context: collector-server/otel-collector,                  platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: relay-server,            context: collector-server/k8s-collector/relay-server,      platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
           - { image: relay-server,            context: collector-server/k8s-collector/relay-server,      platform: linux/arm64, arch: arm64, runner: ubuntu-24.04-arm }
           - { image: workflow-server,         context: runbook-server,                                   platform: linux/amd64, arch: amd64, runner: ubuntu-latest }
@@ -142,14 +138,12 @@ jobs:
         include:
           - { image: services-server,         archs: "amd64 arm64" }
           - { image: services-server-sidecar, archs: "amd64 arm64" }
-          - { image: hasura-migrations,       archs: "amd64 arm64" }
           - { image: app,                     archs: "amd64 arm64" }
           - { image: ticket-server,           archs: "amd64 arm64" }
           - { image: code-analysis,           archs: "amd64 arm64" }
           - { image: notifications,           archs: "amd64 arm64" }
           - { image: k8s-collector,           archs: "amd64 arm64" }
           - { image: cloud-collector-server,  archs: "amd64 arm64" }
-          - { image: otel-collector-server,   archs: "amd64 arm64" }
           - { image: relay-server,            archs: "amd64 arm64" }
           - { image: workflow-server,         archs: "amd64 arm64" }
           - { image: llm-server,              archs: "amd64" }
