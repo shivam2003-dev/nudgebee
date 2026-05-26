@@ -1,16 +1,20 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import SearchIcon from '@mui/icons-material/Search';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import apiAskNudgebee from '@api1/ask-nudgebee';
-import { BoxLayout2 } from '@components1/common';
-import CustomTable from '@components1/common/tables/CustomTable2';
-import CustomLabels from '@components1/common/widgets/CustomLabels';
+import CustomTable from '@common-new/tables/CustomTable2';
+import CustomLabels from '@common-new/widgets/CustomLabels';
 import ExpandableText from '@components1/common/ExpandableText';
 import CreateTool from './CreateTool';
-import { Modal } from '@components1/common/modal';
+import { ListingLayout } from '@components1/ds/ListingLayout';
+import { Button as DsButton } from '@components1/ds/Button';
+import { Input } from '@components1/ds/Input';
+import DownloadButton from '@common-new/DownloadButton';
+import { Modal } from '@components1/ds/Modal';
 import { hasWriteAccess } from '@lib/auth';
 import { useTenantBranding } from '@hooks/useTenantBranding';
-import CustomButton from '@components1/common/NewCustomButton';
-import { EditIcon, ErrorIcon } from '@assets';
+import { ErrorIcon } from '@assets';
 import SafeIcon from '@components1/common/SafeIcon';
 import { snakeToTitleCase } from 'src/utils/common';
 import { Box, Tooltip } from '@mui/material';
@@ -40,20 +44,14 @@ const ListTools = ({ accountId }) => {
         const originalToolName = item[0].rawData?.name || '';
         const formattedToolName = snakeToTitleCase(originalToolName);
         const searchLower = searchToolByName.toLowerCase();
-
-        // Search in both original name (snake_case) and formatted name (Title Case)
         return originalToolName.toLowerCase().includes(searchLower) || formattedToolName.toLowerCase().includes(searchLower);
       });
       setData(filteredData);
     }
   }, [searchToolByName, originalData]);
 
-  const handleSearchChange = (e) => {
-    setSearchToolByName(e.target.value);
-  };
-
-  const handleSearchEnter = () => {
-    listTools();
+  const handleSearchChange = (next) => {
+    setSearchToolByName(next);
   };
 
   const handleEditTool = (tool) => {
@@ -119,19 +117,14 @@ const ListTools = ({ accountId }) => {
               {
                 component:
                   tool.type === 'custom' && tool.nb_tool_type == 'tool' && hasWriteAccess(accountId) ? (
-                    <div style={{ display: 'flex' }}>
-                      <CustomButton
-                        onClick={() => handleEditTool(tool)}
-                        variant='secondary'
-                        size='xSmall'
-                        text={<SafeIcon src={EditIcon} alt='edit' height={20} width={20} />}
-                        sx={{
-                          maxHeight: '32px',
-                          maxWidth: '50px',
-                          minWidth: '50px !important',
-                        }}
-                      />
-                    </div>
+                    <DsButton
+                      tone='secondary'
+                      size='xs'
+                      composition='icon-only'
+                      icon={<EditOutlinedIcon fontSize='small' />}
+                      aria-label='Edit tool'
+                      onClick={() => handleEditTool(tool)}
+                    />
                   ) : null,
               },
             ];
@@ -175,65 +168,61 @@ const ListTools = ({ accountId }) => {
           toolData={selectedTool}
         />
       </Modal>
-      <BoxLayout2
-        id='all-tools'
-        sharingOptions={{
-          download: {
-            enabled: true,
-            onClick: () => {
-              return {
-                tableId: 'tools',
-              };
-            },
-          },
-          sharing: { enabled: true },
-        }}
-        filterOptions={[
-          {
-            type: 'search',
-            enabled: true,
-            onSelect: handleSearchChange,
-            minWidth: '150px',
-            label: 'Search Tool',
-            onEnter: handleSearchEnter,
-            value: searchToolByName,
-          },
-        ]}
-        modalButton={{
-          enabled: hasWriteAccess(accountId),
-          text: 'Create Tool',
-          onClick: () => {
-            setEditMode(false);
-            setSelectedTool(null);
-            setCreateToolModal(true);
-          },
-          id: 'create-tool',
-        }}
-        customButton={
-          <CustomButton
-            text='Integration'
-            id='integration'
-            onClick={() => {
-              window.open('/user-management#integrations', '_blank', 'noopener,noreferrer');
-            }}
+      <ListingLayout id='all-tools'>
+        <ListingLayout.Toolbar
+          actions={
+            <>
+              <DownloadButton onClick={() => ({ tableId: 'tools' })} />
+              <DsButton
+                id='integration'
+                tone='secondary'
+                size='md'
+                onClick={() => window.open('/user-management#integrations', '_blank', 'noopener,noreferrer')}
+              >
+                Integration
+              </DsButton>
+              {hasWriteAccess(accountId) && (
+                <DsButton
+                  id='create-tool'
+                  tone='primary'
+                  size='md'
+                  onClick={() => {
+                    setEditMode(false);
+                    setSelectedTool(null);
+                    setCreateToolModal(true);
+                  }}
+                >
+                  Create Tool
+                </DsButton>
+              )}
+            </>
+          }
+        >
+          <Input
+            size='sm'
+            placeholder='Search Tool'
+            value={searchToolByName}
+            onChange={handleSearchChange}
+            leadingIcon={<SearchIcon fontSize='small' />}
           />
-        }
-      >
-        <CustomTable
-          headers={[
-            { name: 'Name', width: '20%' },
-            { name: 'Description', width: '40%' },
-            { name: 'Status', width: '15%' },
-            { name: 'NB Tool Type', width: '15%' },
-            { name: 'Actions', width: '10%' },
-          ]}
-          tableData={data}
-          rowsPerPage={data.length}
-          totalRows={data.length}
-          loading={loading}
-          id='tools'
-        />
-      </BoxLayout2>
+        </ListingLayout.Toolbar>
+        <ListingLayout.Body padding={0}>
+          <CustomTable
+            headers={[
+              { name: 'Name', width: '20%' },
+              { name: 'Description', width: '40%' },
+              { name: 'Status', width: '15%' },
+              { name: 'NB Tool Type', width: '15%' },
+              { name: 'Actions', width: '10%' },
+            ]}
+            tableData={data}
+            rowsPerPage={data.length}
+            totalRows={data.length}
+            loading={loading}
+            id='tools'
+          />
+        </ListingLayout.Body>
+      </ListingLayout>
     </>
   );
 };

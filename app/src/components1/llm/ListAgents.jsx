@@ -1,18 +1,23 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import SearchIcon from '@mui/icons-material/Search';
 import apiAskNudgebee from '@api1/ask-nudgebee';
 import apiKnowledgeBase from '@api1/knowledge-base';
-import { BoxLayout2, Text } from '@components1/common';
-import CustomTable from '@components1/common/tables/CustomTable2';
-import CustomLabels from '@components1/common/widgets/CustomLabels';
-import { Modal } from '@components1/common/modal';
+import Text from '@common-new/format/Text';
+import CustomTable from '@common-new/tables/CustomTable2';
+import CustomLabels from '@common-new/widgets/CustomLabels';
+import { ListingLayout } from '@components1/ds/ListingLayout';
+import { Button as DsButton } from '@components1/ds/Button';
+import { Input } from '@components1/ds/Input';
+import FilterDropdown from '@components1/ds/FilterDropdown';
+import DownloadButton from '@common-new/DownloadButton';
+import { Modal } from '@components1/ds/Modal';
+import { toast as snackbar } from '@components1/ds/Toast';
 import CreateAgentNew from './CreateAgentNew';
 import CreateAgentExtension from './CreateAgentExtension';
-import ThreeDotsMenu from '@components1/common/ThreeDotsMenu';
+import ThreeDotsMenu from '@common-new/ThreeDotsMenu';
 import ExpandableText from '@components1/common/ExpandableText';
-import CustomButton from '@components1/common/NewCustomButton';
 import { colors } from 'src/utils/colors';
-import { snackbar } from '@components1/common/snackbarService';
 import { hasWriteAccess } from '@lib/auth';
 import { useTenantBranding } from '@hooks/useTenantBranding';
 import { Avatar, Box, Typography, List, ListItem, ListItemText, Checkbox } from '@mui/material';
@@ -317,15 +322,12 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
     setData(filteredData);
   }, [searchAgentByName, agentTypeFilter, originalData, allAgents]);
 
-  const handleSearchChange = (e) => {
-    setSearchAgentByName(e.target.value);
-  };
-  const handleSearchEnter = () => {
-    listAgents();
+  const handleSearchChange = (next) => {
+    setSearchAgentByName(next);
   };
 
   const handleAgentTypeFilterChange = (e) => {
-    setAgentTypeFilter(e.target.value);
+    setAgentTypeFilter(e?.target?.value);
   };
 
   const handleEditAgent = (agent) => {
@@ -591,14 +593,19 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
         handleClose={handleCloseKbSelectionModal}
         title={`Add Knowledge Base to ${selectedAgent?.aliases?.[0] || selectedAgent?.name || 'Agent'}`}
         actionButtons={
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <CustomButton text='Cancel' variant='secondary' size='Medium' onClick={handleCloseKbSelectionModal} />
-            <CustomButton
-              text={isMappingKb ? 'Adding...' : `Add Selected (${selectedKbIds.length})`}
-              size='Medium'
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', p: '12px 24px' }}>
+            <DsButton tone='secondary' size='md' onClick={handleCloseKbSelectionModal}>
+              Cancel
+            </DsButton>
+            <DsButton
+              tone='primary'
+              size='md'
               onClick={handleMapKbToAgent}
+              loading={isMappingKb}
               disabled={selectedKbIds.length === 0 || isMappingKb}
-            />
+            >
+              {isMappingKb ? 'Adding...' : `Add Selected (${selectedKbIds.length})`}
+            </DsButton>
           </Box>
         }
       >
@@ -617,92 +624,87 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
             </Box>
           ) : (
             <Box sx={{ pt: 2 }}>
-              <BoxLayout2
-                id='kb-selection-list'
-                sharingOptions={{
-                  download: { enabled: false },
-                  sharing: { enabled: false },
-                }}
-                filterOptions={[
-                  {
-                    type: 'search',
-                    enabled: true,
-                    onSelect: (e) => setKbSearchTerm(e.target.value),
-                    minWidth: '200px',
-                    label: 'Search Knowledge Base',
-                    value: kbSearchTerm,
-                  },
-                ]}
-              >
-                <CustomTable
-                  headers={[
-                    { name: '', width: '5%' },
-                    { name: 'Name', width: '25%' },
-                    { name: 'Description', width: '35%' },
-                    { name: 'Status', width: '15%' },
-                    { name: 'Created By', width: '20%' },
-                  ]}
-                  tableData={getFilteredKbs().map((kb) => {
-                    const isAlreadyMapped = alreadyMappedKbIds.includes(kb.id);
-                    const isSelected = selectedKbIds.includes(kb.id);
-                    return [
-                      {
-                        component: (
-                          <Checkbox
-                            checked={isSelected || isAlreadyMapped}
-                            disabled={isAlreadyMapped}
-                            size='small'
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => !isAlreadyMapped && handleToggleKbSelection(kb.id)}
-                            sx={{ p: 0 }}
-                          />
-                        ),
-                      },
-                      {
-                        component: (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Text value={kb.name} sx={{ fontWeight: 500 }} />
-                            {isAlreadyMapped && <CustomLabels text='Added' type='success' />}
-                          </Box>
-                        ),
-                      },
-                      {
-                        component: (
-                          <Text
-                            value={kb.description || '-'}
-                            sx={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                            }}
-                          />
-                        ),
-                      },
-                      {
-                        component: <CustomLabels text={kb.status || 'active'} />,
-                      },
-                      {
-                        component: <Text value={kb.created_by?.display_name || '-'} />,
-                      },
-                    ];
-                  })}
-                  rowsPerPage={10}
-                  totalRows={getFilteredKbs().length}
-                  loading={false}
-                  id='kb-selection-table'
-                  onRowClick={(rowData, rowIndex) => {
-                    const kb = getFilteredKbs()[rowIndex];
-                    if (!kb) {
-                      return;
-                    }
-                    const isAlreadyMapped = alreadyMappedKbIds.includes(kb.id);
-                    if (!isAlreadyMapped) {
-                      handleToggleKbSelection(kb.id);
-                    }
-                  }}
-                />
-              </BoxLayout2>
+              <ListingLayout id='kb-selection-list'>
+                <ListingLayout.Toolbar>
+                  <Input
+                    size='sm'
+                    placeholder='Search Knowledge Base'
+                    value={kbSearchTerm}
+                    onChange={(next) => setKbSearchTerm(next)}
+                    leadingIcon={<SearchIcon fontSize='small' />}
+                  />
+                </ListingLayout.Toolbar>
+                <ListingLayout.Body padding={0}>
+                  <CustomTable
+                    headers={[
+                      { name: '', width: '5%' },
+                      { name: 'Name', width: '25%' },
+                      { name: 'Description', width: '35%' },
+                      { name: 'Status', width: '15%' },
+                      { name: 'Created By', width: '20%' },
+                    ]}
+                    tableData={getFilteredKbs().map((kb) => {
+                      const isAlreadyMapped = alreadyMappedKbIds.includes(kb.id);
+                      const isSelected = selectedKbIds.includes(kb.id);
+                      return [
+                        {
+                          component: (
+                            <Checkbox
+                              checked={isSelected || isAlreadyMapped}
+                              disabled={isAlreadyMapped}
+                              size='small'
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => !isAlreadyMapped && handleToggleKbSelection(kb.id)}
+                              sx={{ p: 0 }}
+                            />
+                          ),
+                        },
+                        {
+                          component: (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Text value={kb.name} sx={{ fontWeight: 500 }} />
+                              {isAlreadyMapped && <CustomLabels text='Added' type='success' />}
+                            </Box>
+                          ),
+                        },
+                        {
+                          component: (
+                            <Text
+                              value={kb.description || '-'}
+                              sx={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            />
+                          ),
+                        },
+                        {
+                          component: <CustomLabels text={kb.status || 'active'} />,
+                        },
+                        {
+                          component: <Text value={kb.created_by?.display_name || '-'} />,
+                        },
+                      ];
+                    })}
+                    rowsPerPage={10}
+                    totalRows={getFilteredKbs().length}
+                    loading={false}
+                    id='kb-selection-table'
+                    onRowClick={(_rowData, rowIndex) => {
+                      const kb = getFilteredKbs()[rowIndex];
+                      if (!kb) {
+                        return;
+                      }
+                      const isAlreadyMapped = alreadyMappedKbIds.includes(kb.id);
+                      if (!isAlreadyMapped) {
+                        handleToggleKbSelection(kb.id);
+                      }
+                    }}
+                  />
+                </ListingLayout.Body>
+              </ListingLayout>
             </Box>
           )}
         </Box>
@@ -727,25 +729,22 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
         subtitle={editMode ? 'Edit the agent details' : 'Create a specialized AI assistant tailored to your specific needs.'}
         backgroundColor={colors.background.primaryLightest}
         actionButtons={
-          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='0px' sx={{ '& button': { minWidth: '140px' } }}>
-            <CustomButton
-              text='Cancel'
-              variant='secondary'
-              size='Medium'
+          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='12px 24px' sx={{ '& button': { minWidth: '140px' } }}>
+            <DsButton
+              tone='secondary'
+              size='md'
               onClick={() => {
                 setCreateAgentModal(false);
                 setEditMode(false);
                 setCustomizeMode(false);
                 setSelectedAgent(null);
               }}
-            />
-            <CustomButton
-              text={editMode ? 'Update Agent' : customizeMode ? 'Override Agent Prompt' : 'Create Agent'}
-              size='Medium'
-              onClick={() => {
-                setTriggerSubmit(true);
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='primary' size='md' onClick={() => setTriggerSubmit(true)}>
+              {editMode ? 'Update Agent' : customizeMode ? 'Override Agent Prompt' : 'Create Agent'}
+            </DsButton>
           </Box>
         }
       >
@@ -791,24 +790,21 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
         subtitle='Add custom prompts and tools to enhance the agent capabilities.'
         backgroundColor={colors.background.primaryLightest}
         actionButtons={
-          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='0px' sx={{ '& button': { minWidth: '140px' } }}>
-            <CustomButton
-              text='Cancel'
-              variant='secondary'
-              size='Medium'
+          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='12px 24px' sx={{ '& button': { minWidth: '140px' } }}>
+            <DsButton
+              tone='secondary'
+              size='md'
               onClick={() => {
                 setCreateAgentModal(false);
                 setExtensionMode(false);
                 setSelectedAgent(null);
               }}
-            />
-            <CustomButton
-              text={selectedAgent && extensionsMap[selectedAgent.name]?.length > 0 ? 'Update Extension' : 'Create Extension'}
-              size='Medium'
-              onClick={() => {
-                setTriggerSubmit(true);
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='primary' size='md' onClick={() => setTriggerSubmit(true)}>
+              {selectedAgent && extensionsMap[selectedAgent.name]?.length > 0 ? 'Update Extension' : 'Create Extension'}
+            </DsButton>
           </Box>
         }
       >
@@ -919,15 +915,19 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
           )}
         </Typography>
         <Box sx={{ p: 1, mb: '8px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
-          <CustomButton
-            text='Cancel'
-            variant='secondary'
+          <DsButton
+            tone='secondary'
+            size='md'
             onClick={() => {
               setDeleteModal(false);
               setAgentToDelete(null);
             }}
-          />
-          <CustomButton text={agentToDelete?.overridden ? 'Revert' : 'Delete'} variant='primary' onClick={confirmDeleteAgent} />
+          >
+            Cancel
+          </DsButton>
+          <DsButton tone='danger' size='md' onClick={confirmDeleteAgent}>
+            {agentToDelete?.overridden ? 'Revert' : 'Delete'}
+          </DsButton>
         </Box>
       </Modal>
 
@@ -938,85 +938,79 @@ const ListAgents = ({ accountId, refreshAgentListing, allAgents, loadingAgents }
           <strong>{selectedAgent?.aliases?.[0] || selectedAgent?.name}</strong>&quot;?
         </Typography>
         <Box sx={{ p: 1, mb: '8px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
-          <CustomButton
-            text='Cancel'
-            variant='secondary'
+          <DsButton
+            tone='secondary'
+            size='md'
             onClick={() => {
               setIsRemoveKbModalOpen(false);
               setKbToRemove(null);
             }}
-          />
-          <CustomButton text='Remove' variant='primary' onClick={handleUnmapKbFromAgent} />
+          >
+            Cancel
+          </DsButton>
+          <DsButton tone='danger' size='md' onClick={handleUnmapKbFromAgent}>
+            Remove
+          </DsButton>
         </Box>
       </Modal>
 
-      <BoxLayout2
-        id='all-agents'
-        sharingOptions={{
-          download: {
-            enabled: true,
-            onClick: () => {
-              return {
-                tableId: 'agents',
-              };
-            },
-          },
-          sharing: { enabled: false },
-        }}
-        filterOptions={[
-          {
-            type: 'search',
-            enabled: true,
-            onSelect: handleSearchChange,
-            minWidth: '150px',
-            label: 'Search Agent',
-            onEnter: handleSearchEnter,
-            value: searchAgentByName,
-          },
-          {
-            type: 'dropdown',
-            enabled: true,
-            onSelect: handleAgentTypeFilterChange,
-            minWidth: '150px',
-            label: 'Agent Type',
-            value: agentTypeFilter,
-            options: [
+      <ListingLayout id='all-agents'>
+        <ListingLayout.Toolbar
+          actions={
+            <>
+              <DownloadButton onClick={() => ({ tableId: 'agents' })} />
+              {hasWriteAccess(accountId) && (
+                <DsButton
+                  id='create-agent'
+                  tone='primary'
+                  size='md'
+                  composition='icon+text'
+                  icon={<SafeIcon src={PlusIcon} alt='plus' />}
+                  onClick={() => setCreateAgentModal(true)}
+                >
+                  Create Custom Agent
+                </DsButton>
+              )}
+            </>
+          }
+        >
+          <Input
+            size='sm'
+            placeholder='Search Agent'
+            value={searchAgentByName}
+            onChange={handleSearchChange}
+            leadingIcon={<SearchIcon fontSize='small' />}
+          />
+          <FilterDropdown
+            id='agent-type-filter'
+            label='Agent Type'
+            value={agentTypeFilter}
+            onSelect={handleAgentTypeFilterChange}
+            options={[
               { value: 'all', label: 'All Agents' },
               { value: 'nudgebee-system-agent', label: `${baseTitle} System Agent` },
               { value: 'user-created-agent', label: 'User Created Agent' },
-            ],
-          },
-        ]}
-        modalButton={{
-          enabled: hasWriteAccess(accountId),
-          text: (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Roboto', fontSize: '12px', fontWeight: 500 }}>
-              <SafeIcon src={PlusIcon} alt='plus' />
-              Create Custom Agent
-            </Box>
-          ),
-          onClick: () => {
-            setCreateAgentModal(true);
-          },
-          id: 'create-agent',
-        }}
-      >
-        <CustomTable
-          headers={[
-            { name: 'Name', width: '10%' },
-            { name: 'Description', width: '40%' },
-            { name: 'Status', width: '10%' },
-            { name: 'Tools', width: '10%' },
-            { name: 'KB', width: '5%', info: 'Knowledge Base count - Click to view or manage knowledge bases mapped to this agent' },
-            { name: 'Action', width: '5%' },
-          ]}
-          tableData={data}
-          rowsPerPage={data.length}
-          totalRows={data.length}
-          loading={loadingAgents}
-          id='agents'
-        />
-      </BoxLayout2>
+            ]}
+          />
+        </ListingLayout.Toolbar>
+        <ListingLayout.Body padding={0}>
+          <CustomTable
+            headers={[
+              { name: 'Name', width: '10%' },
+              { name: 'Description', width: '40%' },
+              { name: 'Status', width: '10%' },
+              { name: 'Tools', width: '10%' },
+              { name: 'KB', width: '5%', info: 'Knowledge Base count - Click to view or manage knowledge bases mapped to this agent' },
+              { name: 'Action', width: '5%' },
+            ]}
+            tableData={data}
+            rowsPerPage={data.length}
+            totalRows={data.length}
+            loading={loadingAgents}
+            id='agents'
+          />
+        </ListingLayout.Body>
+      </ListingLayout>
     </>
   );
 };

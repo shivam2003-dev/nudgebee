@@ -3,10 +3,10 @@ import { Box, Typography } from '@mui/material';
 import PropTypes from 'prop-types';
 import ShimmerLoading from '@components1/common/ShimmerLoading';
 import apiAskNudgebee from '@api1/ask-nudgebee';
-import CustomButton from '@components1/common/NewCustomButton';
-import { snackbar } from '@components1/common/snackbarService';
+import { Button as DsButton } from '@components1/ds/Button';
+import { toast as snackbar } from '@components1/ds/Toast';
 import { colors } from 'src/utils/colors';
-import WidgetCard from '@components1/common/WidgetCard';
+import WidgetCard from '@components1/ds/WidgetCard';
 
 // Import MonocoEditor if available or a simple textarea as a fallback
 // For simplicity and matching other components, assuming we have a code editor component
@@ -77,7 +77,9 @@ const RCAFormatTab = ({ accountId }) => {
             Customize the Markdown template used by AI to generate RCA documents for your events.
           </Typography>
         </Box>
-        <CustomButton text='Save Changes' variant='primary' onClick={handleSave} loading={saving} disabled={loading || saving} />
+        <DsButton tone='primary' size='md' onClick={handleSave} loading={saving} disabled={loading || saving}>
+          Save Changes
+        </DsButton>
       </WidgetCard>
 
       {loading ? (

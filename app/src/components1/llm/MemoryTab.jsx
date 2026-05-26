@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Box, Typography, Alert } from '@mui/material';
-import WidgetCard from '@components1/common/WidgetCard';
+import WidgetCard from '@components1/ds/WidgetCard';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import CheckIcon from '@mui/icons-material/Check';
@@ -10,9 +10,9 @@ import Link from 'next/link';
 import { colors } from 'src/utils/colors';
 import api from '@api1/ask-nudgebee';
 import Loader from '@components1/common/Loader';
-import { snackbar } from '@components1/common/snackbarService';
-import { Modal } from '@components1/common/modal';
-import CustomButton from '@components1/common/NewCustomButton';
+import { toast as snackbar } from '@components1/ds/Toast';
+import { Modal } from '@components1/ds/Modal';
+import { Button as DsButton } from '@components1/ds/Button';
 import CustomSearch from '@components1/common/CustomSearch';
 import CustomCheckBox from '@components1/common/CustomCheckbox';
 
@@ -625,30 +625,20 @@ const MemoryTab = ({ accountId }) => {
             This action cannot be undone. The AI will no longer have access to this information.
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <CustomButton
-              variant='secondary'
-              size='Small'
-              text='Cancel'
+            <DsButton
+              tone='secondary'
+              size='sm'
               onClick={() => {
                 setDeleteModalOpen(false);
                 setSelectedMemory(null);
               }}
               disabled={submitting}
-            />
-            <CustomButton
-              variant='primary'
-              size='Small'
-              text='Delete'
-              onClick={handleConfirmDelete}
-              loading={submitting}
-              sx={{
-                backgroundColor: colors.error,
-                '&:hover': {
-                  backgroundColor: colors.error,
-                  filter: 'brightness(0.9)',
-                },
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='danger' size='sm' onClick={handleConfirmDelete} loading={submitting}>
+              Delete
+            </DsButton>
           </Box>
         </Box>
       </Modal>

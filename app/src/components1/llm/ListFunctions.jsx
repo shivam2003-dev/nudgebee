@@ -1,21 +1,25 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import SearchIcon from '@mui/icons-material/Search';
 import apiAskNudgebee from '@api1/ask-nudgebee';
-import { BoxLayout2, Text } from '@components1/common';
-import CustomTable from '@components1/common/tables/CustomTable2';
-import CustomLabels from '@components1/common/widgets/CustomLabels';
+import Text from '@common-new/format/Text';
+import CustomTable from '@common-new/tables/CustomTable2';
+import CustomLabels from '@common-new/widgets/CustomLabels';
 import ExpandableText from '@components1/common/ExpandableText';
 import CreateFunction from './CreateFunction';
-import { Modal } from '@components1/common/modal';
+import { ListingLayout } from '@components1/ds/ListingLayout';
+import { Button as DsButton } from '@components1/ds/Button';
+import { Input } from '@components1/ds/Input';
+import DownloadButton from '@common-new/DownloadButton';
+import { Modal } from '@components1/ds/Modal';
 import { hasWriteAccess } from '@lib/auth';
-import CustomButton from '@components1/common/NewCustomButton';
-import ThreeDotsMenu from '@components1/common/ThreeDotsMenu';
+import ThreeDotsMenu from '@common-new/ThreeDotsMenu';
 import { PlusIcon, DeleteIconRed as deleteIcon, EditIcon } from '@assets';
 import SafeIcon from '@components1/common/SafeIcon';
 import { colors } from 'src/utils/colors';
-import { snackbar } from '@components1/common/snackbarService';
+import { toast as snackbar } from '@components1/ds/Toast';
 import { Box, Typography, Chip } from '@mui/material';
-import DateTime from '@components1/common/format/Datetime';
+import DateTime from '@common-new/format/Datetime';
 
 const ListFunctions = ({ accountId }) => {
   const [data, setData] = React.useState([]);
@@ -45,12 +49,8 @@ const ListFunctions = ({ accountId }) => {
     }
   }, [searchFunctionByName, originalData]);
 
-  const handleSearchChange = (e) => {
-    setSearchFunctionByName(e.target.value);
-  };
-
-  const handleSearchEnter = () => {
-    listFunctions();
+  const handleSearchChange = (next) => {
+    setSearchFunctionByName(next);
   };
 
   const handleDeleteFunction = (func) => {
@@ -101,7 +101,6 @@ const ListFunctions = ({ accountId }) => {
   const getMenuItems = () => {
     const menuItems = [];
 
-    // Edit (only for users with write access)
     if (hasWriteAccess(accountId)) {
       menuItems.push({
         id: 'edit',
@@ -110,7 +109,6 @@ const ListFunctions = ({ accountId }) => {
       });
     }
 
-    // Delete (only for users with write access)
     if (hasWriteAccess(accountId)) {
       menuItems.push({
         id: 'delete',
@@ -136,11 +134,9 @@ const ListFunctions = ({ accountId }) => {
                 return 0;
               }
               try {
-                // Try parsing as JSON first
                 const parsed = typeof variables === 'string' ? JSON.parse(variables) : variables;
                 return Array.isArray(parsed) ? parsed.length : Object.keys(parsed || {}).length;
               } catch {
-                // If JSON parsing fails, treat as comma-separated string
                 if (typeof variables === 'string') {
                   return variables
                     .split(',')
@@ -249,23 +245,20 @@ const ListFunctions = ({ accountId }) => {
         }
         backgroundColor={colors.background.primaryLightest}
         actionButtons={
-          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='0px' sx={{ '& button': { minWidth: '140px' } }}>
-            <CustomButton
-              text='Cancel'
-              variant='secondary'
-              size='Medium'
+          <Box display='flex' alignItems='center' justifyContent='flex-end' gap='12px' p='12px 24px' sx={{ '& button': { minWidth: '140px' } }}>
+            <DsButton
+              tone='secondary'
+              size='md'
               onClick={() => {
                 setCreateFunctionModal(false);
                 setEditMode(false);
               }}
-            />
-            <CustomButton
-              text={editMode ? 'Update Function' : 'Save Function'}
-              size='Medium'
-              onClick={() => {
-                setTriggerSubmit(!triggerSubmit);
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='primary' size='md' onClick={() => setTriggerSubmit(!triggerSubmit)}>
+              {editMode ? 'Update Function' : 'Save Function'}
+            </DsButton>
           </Box>
         }
       >
@@ -286,7 +279,6 @@ const ListFunctions = ({ accountId }) => {
             // Called when submit starts
           }}
           onSubmitEnd={() => {
-            // Called when submit ends (success or error)
             setTriggerSubmit(false);
           }}
           isModal={true}
@@ -312,80 +304,76 @@ const ListFunctions = ({ accountId }) => {
           This action cannot be undone. The function will be permanently removed.
         </Typography>
         <Box sx={{ p: 1, mb: '8px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '16px' }}>
-          <CustomButton
-            text='Cancel'
-            variant='secondary'
+          <DsButton
+            tone='secondary'
+            size='md'
             onClick={() => {
               setDeleteModal(false);
               setFunctionToDelete(null);
             }}
-          />
-          <CustomButton text='Delete' variant='primary' onClick={confirmDeleteFunction} />
+          >
+            Cancel
+          </DsButton>
+          <DsButton tone='danger' size='md' onClick={confirmDeleteFunction}>
+            Delete
+          </DsButton>
         </Box>
       </Modal>
 
-      <BoxLayout2
-        id='all-functions'
-        sharingOptions={{
-          download: {
-            enabled: true,
-            onClick: () => {
-              return {
-                tableId: 'functions',
-              };
-            },
-          },
-          sharing: { enabled: false },
-        }}
-        filterOptions={[
-          {
-            type: 'search',
-            enabled: true,
-            onSelect: handleSearchChange,
-            minWidth: '150px',
-            label: 'Search Function',
-            onEnter: handleSearchEnter,
-            value: searchFunctionByName,
-          },
-        ]}
-        modalButton={{
-          enabled: hasWriteAccess(accountId),
-          text: (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Roboto', fontSize: '12px', fontWeight: 500 }}>
-              <SafeIcon src={PlusIcon} alt='plus' />
-              Create Function
-            </Box>
-          ),
-          onClick: () => {
-            setCreateFunctionModal(true);
-          },
-          id: 'create-function',
-        }}
-      >
-        <CustomTable
-          headers={[
-            { name: 'Name', width: '25%' },
-            { name: 'Description', width: '30%' },
-            { name: 'Status', width: '10%' },
-            { name: 'Prompt', width: '25%' },
-            { name: 'Created', width: '5%' },
-            { name: 'Actions', width: '5%' },
-          ]}
-          rowProps={{
-            sx: {
-              '&:hover': {
-                backgroundColor: '#f8f9fa',
-                transition: 'background-color 0.2s ease',
+      <ListingLayout id='all-functions'>
+        <ListingLayout.Toolbar
+          actions={
+            <>
+              <DownloadButton onClick={() => ({ tableId: 'functions' })} />
+              {hasWriteAccess(accountId) && (
+                <DsButton
+                  id='create-function'
+                  tone='primary'
+                  size='md'
+                  composition='icon+text'
+                  icon={<SafeIcon src={PlusIcon} alt='plus' />}
+                  onClick={() => setCreateFunctionModal(true)}
+                >
+                  Create Function
+                </DsButton>
+              )}
+            </>
+          }
+        >
+          <Input
+            size='sm'
+            placeholder='Search Function'
+            value={searchFunctionByName}
+            onChange={handleSearchChange}
+            leadingIcon={<SearchIcon fontSize='small' />}
+          />
+        </ListingLayout.Toolbar>
+        <ListingLayout.Body padding={0}>
+          <CustomTable
+            headers={[
+              { name: 'Name', width: '25%' },
+              { name: 'Description', width: '30%' },
+              { name: 'Status', width: '10%' },
+              { name: 'Prompt', width: '25%' },
+              { name: 'Created', width: '5%' },
+              { name: 'Actions', width: '5%' },
+            ]}
+            rowProps={{
+              sx: {
+                '&:hover': {
+                  backgroundColor: '#f8f9fa',
+                  transition: 'background-color 0.2s ease',
+                },
               },
-            },
-          }}
-          tableData={data}
-          rowsPerPage={data.length}
-          totalRows={data.length}
-          loading={loading}
-          id='functions'
-        />
-      </BoxLayout2>
+            }}
+            tableData={data}
+            rowsPerPage={data.length}
+            totalRows={data.length}
+            loading={loading}
+            id='functions'
+          />
+        </ListingLayout.Body>
+      </ListingLayout>
     </>
   );
 };

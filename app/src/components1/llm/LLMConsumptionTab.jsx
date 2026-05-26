@@ -25,13 +25,13 @@ import NDialog from '@components1/common/modal/NDialog';
 import { colors } from 'src/utils/colors';
 import apiBudget from '@api1/budget';
 import Loader from '@components1/common/Loader';
-import CustomButton from '@components1/common/NewCustomButton';
-import { snackbar } from '@components1/common/snackbarService';
-import { Modal } from '@components1/common/modal';
+import { Button as DsButton } from '@components1/ds/Button';
+import { toast as snackbar } from '@components1/ds/Toast';
+import { Modal } from '@components1/ds/Modal';
 import { getUserSession, isTenantAdmin } from '@lib/auth';
 import { useTenantBranding } from '@hooks/useTenantBranding';
 import apiUser from '@api1/user';
-import WidgetCard from '@components1/common/WidgetCard';
+import WidgetCard from '@components1/ds/WidgetCard';
 import { ProgressBar } from '@components1/ds/ProgressBar';
 import { Label } from '@components1/ds/Label';
 
@@ -871,14 +871,12 @@ const BudgetEditModal = ({ open, onClose, onSaved, config, maxCaps, systemDefaul
 
         <Divider sx={{ my: 2 }} />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
-          <CustomButton variant='lightButton' onClick={onClose} disabled={loading} text='Cancel' />
-          <CustomButton
-            variant='blueButton'
-            onClick={handleSave}
-            loading={loading}
-            disabled={hasConflict}
-            text={isEdit ? 'Save Changes' : 'Create'}
-          />
+          <DsButton tone='secondary' size='md' onClick={onClose} disabled={loading}>
+            Cancel
+          </DsButton>
+          <DsButton tone='primary' size='md' onClick={handleSave} loading={loading} disabled={hasConflict}>
+            {isEdit ? 'Save Changes' : 'Create'}
+          </DsButton>
         </Box>
       </Box>
     </Modal>
@@ -1283,7 +1281,11 @@ const LLMConsumptionTab = ({ accountId }) => {
               midnight.
             </Typography>
           </Box>
-          {isAdmin && <CustomButton variant='blueButton' onClick={openManage} text='Manage Budgets' />}
+          {isAdmin && (
+            <DsButton tone='primary' size='md' onClick={openManage}>
+              Manage Budgets
+            </DsButton>
+          )}
         </Box>
       </WidgetCard>
 

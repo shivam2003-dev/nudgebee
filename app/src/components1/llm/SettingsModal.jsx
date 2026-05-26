@@ -1,7 +1,8 @@
-import { Box, Tabs, Tab } from '@mui/material';
+import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import { Modal } from '@components1/common/modal';
+import { Modal } from '@components1/ds/Modal';
+import { Tabs } from '@components1/ds/Tabs';
 import ListAgents from '@components1/llm/ListAgents';
 import ListTools from '@components1/llm/ListTools';
 import ListFunctions from '@components1/llm/ListFunctions';
@@ -19,95 +20,29 @@ const SettingsModal = ({ open, onClose, accountId, allAgents, refreshAgentListin
   const [tabsConfig, setTabsConfig] = useState([]);
   const [typeSelected, setTypeSelected] = useState('agents');
 
-  // Initialize tabs with feature access check
   useEffect(() => {
     const initializeTabs = async () => {
       const baseTabsConfig = [
-        {
-          key: 'agents',
-          value: 'agents',
-          icon: AgentIcon,
-          label: 'Agents',
-          alt: 'agent',
-        },
-        {
-          key: 'tools',
-          value: 'tools',
-          icon: ToolsIcon,
-          label: 'Tools',
-          alt: 'tools',
-        },
+        { id: 'agents', icon: AgentIcon, label: 'Agents', alt: 'agent', size: 16 },
+        { id: 'tools', icon: ToolsIcon, label: 'Tools', alt: 'tools', size: 16 },
       ];
 
       try {
         const hasAccess = await hasFeatureAccess('LLM_FUNCTION');
         if (hasAccess) {
-          baseTabsConfig.push({
-            key: 'functions',
-            value: 'functions',
-            icon: LLMFunctionIcon,
-            label: 'Functions',
-            alt: 'functions',
-            width: 20,
-            height: 20,
-          });
+          baseTabsConfig.push({ id: 'functions', icon: LLMFunctionIcon, label: 'Functions', alt: 'functions', size: 18 });
         }
       } catch (error) {
-        // Log error appropriately - in production this should use proper logging
         if (process.env.NODE_ENV === 'development') {
           console.error('Error checking feature access:', error);
         }
       }
 
-      baseTabsConfig.push({
-        key: 'consumption',
-        value: 'consumption',
-        icon: LLMConsumptionIcon,
-        label: 'Usage & Limits',
-        alt: 'consumption',
-        width: 16,
-        height: 16,
-      });
-
-      baseTabsConfig.push({
-        key: 'global-context',
-        value: 'global-context',
-        icon: DocumentationIcon,
-        label: 'Global Context',
-        alt: 'global-context',
-        width: 16,
-        height: 16,
-      });
-
-      baseTabsConfig.push({
-        key: 'knowledge-base',
-        value: 'knowledge-base',
-        icon: DataBaseDark,
-        label: 'Knowledge Base',
-        alt: 'knowledge-base',
-        width: 16,
-        height: 16,
-      });
-
-      baseTabsConfig.push({
-        key: 'memory',
-        value: 'memory',
-        icon: InMemoryIcon,
-        label: 'Memory',
-        alt: 'memory',
-        width: 16,
-        height: 16,
-      });
-
-      baseTabsConfig.push({
-        key: 'rca-format',
-        value: 'rca-format',
-        icon: FileOutlineIcon,
-        label: 'RCA Format',
-        alt: 'rca-format',
-        width: 16,
-        height: 16,
-      });
+      baseTabsConfig.push({ id: 'consumption', icon: LLMConsumptionIcon, label: 'Usage & Limits', alt: 'consumption', size: 16 });
+      baseTabsConfig.push({ id: 'global-context', icon: DocumentationIcon, label: 'Global Context', alt: 'global-context', size: 16 });
+      baseTabsConfig.push({ id: 'knowledge-base', icon: DataBaseDark, label: 'Knowledge Base', alt: 'knowledge-base', size: 16 });
+      baseTabsConfig.push({ id: 'memory', icon: InMemoryIcon, label: 'Memory', alt: 'memory', size: 16 });
+      baseTabsConfig.push({ id: 'rca-format', icon: FileOutlineIcon, label: 'RCA Format', alt: 'rca-format', size: 16 });
 
       setTabsConfig(baseTabsConfig);
     };
@@ -116,26 +51,15 @@ const SettingsModal = ({ open, onClose, accountId, allAgents, refreshAgentListin
     }
   }, [open]);
 
-  const getTabs = () => {
-    return tabsConfig.map((tabConfig) => (
-      <Tab
-        key={tabConfig.key}
-        value={tabConfig.value}
-        id={`settings-tab-${tabConfig.value}`}
-        label={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <SafeIcon src={tabConfig.icon} alt={tabConfig.alt} width={tabConfig.width} height={tabConfig.height} />
-            {tabConfig.label}
-          </Box>
-        }
-        centered
-      />
-    ));
-  };
-
   const handleClose = () => {
     onClose();
   };
+
+  const dsTabs = tabsConfig.map((t) => ({
+    id: t.id,
+    icon: <SafeIcon src={t.icon} alt={t.alt} width={t.size} height={t.size} />,
+    label: t.label,
+  }));
 
   return (
     <Modal
@@ -152,54 +76,17 @@ const SettingsModal = ({ open, onClose, accountId, allAgents, refreshAgentListin
       }}
     >
       <Box
-        display='flex'
-        flexDirection={'column'}
-        alignItems={'flex-start'}
-        my={0}
         sx={{
           position: 'sticky',
           top: 0,
           zIndex: 10,
           backgroundColor: colors.background.white,
           borderBottom: `1px solid ${colors.border.secondary}`,
-          pb: '0px',
           mb: '16px',
           padding: '0px 24px',
         }}
       >
-        <Tabs
-          value={typeSelected}
-          onChange={(_e, v) => {
-            setTypeSelected(v);
-          }}
-          aria-label='Platform'
-          sx={{
-            '& .MuiTabs-indicator': {
-              backgroundColor: colors.text.primary,
-            },
-            '& .MuiTab-root': {
-              minWidth: '80px',
-              height: '36px',
-              padding: '0px 16px',
-              textTransform: 'inherit',
-              color: colors.text.secondary,
-              fontFamily: 'Roboto',
-              fontSize: '13px',
-              fontWeight: 500,
-              '&.Mui-selected': {
-                color: colors.text.primary,
-              },
-              '& img': {
-                filter: 'brightness(0) saturate(100%) invert(23%) sepia(21%) saturate(699%) hue-rotate(178deg) brightness(87%) contrast(85%)',
-              },
-              '&.Mui-selected img': {
-                filter: 'brightness(0) saturate(100%) invert(45%) sepia(23%) saturate(3237%) hue-rotate(195deg) brightness(98%) contrast(98%)',
-              },
-            },
-          }}
-        >
-          {getTabs()}
-        </Tabs>
+        {dsTabs.length > 0 && <Tabs tabs={dsTabs} value={typeSelected} onChange={(next) => setTypeSelected(next)} size='sm' ariaLabel='Settings' />}
       </Box>
       <Box sx={{ padding: '0px 24px' }}>
         {typeSelected == 'agents' ? (

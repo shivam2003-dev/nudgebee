@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@mui/material';
 import CustomTooltip from '@components1/common/CustomTooltip';
+import { Button as DsButton } from '@components1/ds/Button';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -26,15 +27,14 @@ import AttachFileOutlinedIcon from '@mui/icons-material/AttachFileOutlined';
 import { colors } from 'src/utils/colors';
 import apiKnowledgeBase from '@api1/knowledge-base';
 import Loader from '@components1/common/Loader';
-import { snackbar } from '@components1/common/snackbarService';
-import { Text } from '@components1/common';
-import CustomButton from '@components1/common/NewCustomButton';
-import ThreeDotsMenu from '@components1/common/ThreeDotsMenu';
-import { Modal } from '@components1/common/modal';
+import { toast as snackbar } from '@components1/ds/Toast';
+import Text from '@common-new/format/Text';
+import ThreeDotsMenu from '@common-new/ThreeDotsMenu';
+import { Modal } from '@components1/ds/Modal';
 import { UploadIcon, PlusIcon, EditIcon, DeleteIconRed as deleteIcon, serviceNowIcon, jiraIcon, ManualTriggerIconBlue } from '@assets';
 import { hasWriteAccess } from '@lib/auth';
 import SafeIcon from '@components1/common/SafeIcon';
-import WidgetCard from '@components1/common/WidgetCard';
+import WidgetCard from '@components1/ds/WidgetCard';
 import CustomTabs from '@components1/common/CustomTabs';
 import { formatTrigger, formatDuration, formatDocuments } from '@components1/llm/kbLoadHistoryFormat';
 
@@ -834,15 +834,12 @@ const KnowledgeBaseFormModal = ({ open, onClose, onSubmit, editKnowledgeBase, lo
             gap: '12px',
           }}
         >
-          <CustomButton variant='secondary' size='Medium' text='Cancel' onClick={onClose} disabled={loading} />
-          <CustomButton
-            variant='primary'
-            size='Medium'
-            text={editKnowledgeBase ? 'Update' : 'Create'}
-            onClick={handleSubmit}
-            loading={loading}
-            disabled={loading || !name.trim()}
-          />
+          <DsButton tone='secondary' size='md' onClick={onClose} disabled={loading}>
+            Cancel
+          </DsButton>
+          <DsButton tone='primary' size='md' onClick={handleSubmit} loading={loading} disabled={loading || !name.trim()}>
+            {editKnowledgeBase ? 'Update' : 'Create'}
+          </DsButton>
         </Box>
       </Box>
     </Modal>
@@ -1173,17 +1170,15 @@ const KnowledgeBaseTab = ({ accountId }) => {
           </Typography>
         </Box>
         {hasAccess && (
-          <CustomButton
-            variant='primary'
-            size='Small'
-            text={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Roboto', fontSize: '12px', fontWeight: 500 }}>
-                <SafeIcon src={PlusIcon} alt='plus' width={14} height={14} />
-                Add Knowledge Base
-              </Box>
-            }
+          <DsButton
+            tone='primary'
+            size='sm'
+            composition='icon+text'
+            icon={<SafeIcon src={PlusIcon} alt='plus' width={14} height={14} />}
             onClick={handleCreate}
-          />
+          >
+            Add Knowledge Base
+          </DsButton>
         )}
       </WidgetCard>
 
@@ -1221,7 +1216,11 @@ const KnowledgeBaseTab = ({ accountId }) => {
           >
             Create a knowledge base to provide the AI with account-specific documentation and context.
           </Typography>
-          {hasAccess && <CustomButton variant='secondary' size='Small' text='Create Knowledge Base' onClick={handleCreate} />}
+          {hasAccess && (
+            <DsButton tone='secondary' size='sm' onClick={handleCreate}>
+              Create Knowledge Base
+            </DsButton>
+          )}
         </Box>
       )}
 
@@ -1299,30 +1298,20 @@ const KnowledgeBaseTab = ({ accountId }) => {
             This action cannot be undone. The AI will no longer have access to this knowledge.
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <CustomButton
-              variant='secondary'
-              size='Small'
-              text='Cancel'
+            <DsButton
+              tone='secondary'
+              size='sm'
               onClick={() => {
                 setDeleteModalOpen(false);
                 setSelectedKnowledgeBase(null);
               }}
               disabled={submitting}
-            />
-            <CustomButton
-              variant='primary'
-              size='Small'
-              text='Delete'
-              onClick={handleConfirmDelete}
-              loading={submitting}
-              sx={{
-                backgroundColor: colors.error,
-                '&:hover': {
-                  backgroundColor: colors.error,
-                  filter: 'brightness(0.9)',
-                },
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='danger' size='sm' onClick={handleConfirmDelete} loading={submitting}>
+              Delete
+            </DsButton>
           </Box>
         </Box>
       </Modal>

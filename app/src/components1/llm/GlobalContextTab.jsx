@@ -5,15 +5,15 @@ import CustomTooltip from '@components1/common/CustomTooltip';
 import { colors } from 'src/utils/colors';
 import apiGlobalContext from '@api1/global-context';
 import Loader from '@components1/common/Loader';
-import { snackbar } from '@components1/common/snackbarService';
-import { Text } from '@components1/common';
-import CustomButton from '@components1/common/NewCustomButton';
-import ThreeDotsMenu from '@components1/common/ThreeDotsMenu';
-import { Modal } from '@components1/common/modal';
+import { toast as snackbar } from '@components1/ds/Toast';
+import Text from '@common-new/format/Text';
+import { Button as DsButton } from '@components1/ds/Button';
+import ThreeDotsMenu from '@common-new/ThreeDotsMenu';
+import { Modal } from '@components1/ds/Modal';
 import { UploadIcon, PlusIcon, EditIcon, DeleteIconRed as deleteIcon } from '@assets';
 import SafeIcon from '@components1/common/SafeIcon';
 import { hasWriteAccess } from '@lib/auth';
-import WidgetCard from '@components1/common/WidgetCard';
+import WidgetCard from '@components1/ds/WidgetCard';
 
 const formatExactDate = (dateString) => {
   if (!dateString) return '-';
@@ -458,15 +458,12 @@ const GlobalContextFormModal = ({ open, onClose, onSubmit, editContext, loading 
             gap: '12px',
           }}
         >
-          <CustomButton variant='secondary' size='Medium' text='Cancel' onClick={onClose} disabled={loading} />
-          <CustomButton
-            variant='primary'
-            size='Medium'
-            text={editContext ? 'Update' : 'Create'}
-            onClick={handleSubmit}
-            loading={loading}
-            disabled={loading || !name.trim()}
-          />
+          <DsButton tone='secondary' size='md' onClick={onClose} disabled={loading}>
+            Cancel
+          </DsButton>
+          <DsButton tone='primary' size='md' onClick={handleSubmit} loading={loading} disabled={loading || !name.trim()}>
+            {editContext ? 'Update' : 'Create'}
+          </DsButton>
         </Box>
       </Box>
     </Modal>
@@ -661,19 +658,17 @@ const GlobalContextTab = ({ accountId }) => {
           </Typography>
         </Box>
         {hasAccess && (
-          <CustomButton
-            variant='primary'
-            size='Small'
-            text={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'Roboto', fontSize: '12px', fontWeight: 500 }}>
-                <SafeIcon src={PlusIcon} alt='plus' width={14} height={14} />
-                Add Global Context
-              </Box>
-            }
+          <DsButton
+            tone='primary'
+            size='sm'
+            composition='icon+text'
+            icon={<SafeIcon src={PlusIcon} alt='plus' width={14} height={14} />}
             onClick={handleCreate}
             disabled={globalContexts.length > 0}
             tooltip={globalContexts.length > 0 ? 'Only one global context is allowed per account' : undefined}
-          />
+          >
+            Add Global Context
+          </DsButton>
         )}
       </WidgetCard>
 
@@ -711,7 +706,11 @@ const GlobalContextTab = ({ accountId }) => {
           >
             Create a global context to provide the AI with account-specific knowledge. Only one global context is allowed per account.
           </Typography>
-          {hasAccess && <CustomButton variant='secondary' size='Small' text='Create Global Context' onClick={handleCreate} />}
+          {hasAccess && (
+            <DsButton tone='secondary' size='sm' onClick={handleCreate}>
+              Create Global Context
+            </DsButton>
+          )}
         </Box>
       )}
 
@@ -754,30 +753,20 @@ const GlobalContextTab = ({ accountId }) => {
             This action cannot be undone. The AI planner for this account will no longer have access to this context.
           </Typography>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <CustomButton
-              variant='secondary'
-              size='Small'
-              text='Cancel'
+            <DsButton
+              tone='secondary'
+              size='sm'
               onClick={() => {
                 setDeleteModalOpen(false);
                 setSelectedContext(null);
               }}
               disabled={submitting}
-            />
-            <CustomButton
-              variant='primary'
-              size='Small'
-              text='Delete'
-              onClick={handleConfirmDelete}
-              loading={submitting}
-              sx={{
-                backgroundColor: colors.error,
-                '&:hover': {
-                  backgroundColor: colors.error,
-                  filter: 'brightness(0.9)',
-                },
-              }}
-            />
+            >
+              Cancel
+            </DsButton>
+            <DsButton tone='danger' size='sm' onClick={handleConfirmDelete} loading={submitting}>
+              Delete
+            </DsButton>
           </Box>
         </Box>
       </Modal>
