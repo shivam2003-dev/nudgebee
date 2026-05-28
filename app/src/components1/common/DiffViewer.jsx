@@ -31,7 +31,30 @@ const CodeMirrorDiffViewer = ({ originalCode, newCode, leftLabel, rightLabel, ma
   }, [originalCode, newCode]);
 
   return (
-    <div style={{ width: '100%', maxWidth, margin: '16px auto' }}>
+    <div className='cm-diff-viewer-bright' style={{ width: '100%', maxWidth, margin: '16px auto' }}>
+      <style>{`
+        .cm-diff-viewer-bright .cm-deletedChunk { background-color: #ffd4d4 !important; }
+        .cm-diff-viewer-bright .cm-changedLine { background-color: #fff3a8 !important; }
+        .cm-diff-viewer-bright .cm-deletedText,
+        .cm-diff-viewer-bright .cm-deletedChunk .cm-deletedText {
+          background-color: #ff9b9b !important;
+          color: #5a0000 !important;
+          text-decoration: none !important;
+        }
+        .cm-diff-viewer-bright .cm-changedText {
+          background-color: #ffe066 !important;
+          color: #4a3500 !important;
+        }
+        .cm-diff-viewer-bright .cm-insertedLine,
+        .cm-diff-viewer-bright .cm-insertedLine .cm-changedText {
+          background-color: #a8e6a8 !important;
+          color: #0a3d0a !important;
+          text-decoration: none !important;
+        }
+        .cm-diff-viewer-bright .cm-changeGutter { background-color: transparent !important; }
+        .cm-diff-viewer-bright .cm-changedLineGutter { background-color: transparent !important; }
+        .cm-diff-viewer-bright .cm-deletedLineGutter { background-color: transparent !important; }
+      `}</style>
       {(leftLabel || rightLabel) && (
         <div style={{ display: 'flex', marginBottom: '8px' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>{leftLabel}</div>
