@@ -21,6 +21,7 @@ import (
 	"github.com/eko/gocache/lib/v4/cache"
 	"github.com/eko/gocache/store/bigcache/v4"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
 
@@ -795,22 +796,21 @@ func commonAccountRoleValidation(ctx *security.RequestContext, manager *database
 		}
 	}
 
-	// check if account exists for same tenant
-	for _, role := range accountRoles {
-		accountRow := manager.Db.QueryRowx("SELECT count(*) FROM cloud_accounts WHERE tenant = $1 AND id = $2", ctx.GetSecurityContext().GetTenantId(), role.AccountId)
-		if accountRow.Err() != nil {
-			ctx.GetLogger().Error("Error fetching account", "error", accountRow.Err())
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
-		account := map[string]any{}
-		err := accountRow.MapScan(account)
-		if err != nil {
-			ctx.GetLogger().Error("Error scanning account", "error", err)
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
-		if account["count"].(int64) == 0 {
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
+	// Batch-validate all accounts in a single query instead of one query per role
+	uniqueAccountIds := lo.Uniq(lo.Map(accountRoles, func(r AccountRole, _ int) string { return r.AccountId }))
+	if len(uniqueAccountIds) == 0 {
+		return nil
+	}
+	var matchedCount int
+	err := manager.Db.Get(&matchedCount,
+		"SELECT count(*) FROM cloud_accounts WHERE tenant = $1 AND id = ANY($2)",
+		ctx.GetSecurityContext().GetTenantId(), pq.Array(uniqueAccountIds))
+	if err != nil {
+		ctx.GetLogger().Error("Error validating accounts", "error", err)
+		return common.ErrorUnauthorized("Account not found in tenant")
+	}
+	if matchedCount != len(uniqueAccountIds) {
+		return common.ErrorUnauthorized("Account not found in tenant")
 	}
 
 	return nil
@@ -995,37 +995,50 @@ func commonK8sAccountNamespaceRoleValidation(ctx *security.RequestContext, manag
 		}
 	}
 
-	// check if account exists for same tenant
-	for _, role := range accountRoles {
-		// validate account
-		accountRow := manager.Db.QueryRowx("SELECT count(*) FROM cloud_accounts WHERE tenant = $1 AND id = $2", ctx.GetSecurityContext().GetTenantId(), role.AccountId)
-		if accountRow.Err() != nil {
-			ctx.GetLogger().Error("Error fetching account", "error", accountRow.Err())
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
-		account := map[string]any{}
-		err := accountRow.MapScan(account)
-		if err != nil {
-			ctx.GetLogger().Error("Error scanning account", "error", err)
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
-		if account["count"].(int64) == 0 {
-			return common.ErrorUnauthorized("Account not found in tenant")
-		}
+	// Batch-validate all accounts in a single query instead of one query per role
+	uniqueAccountIds := lo.Uniq(lo.Map(accountRoles, func(r AccountNamespaceRole, _ int) string { return r.AccountId }))
+	if len(uniqueAccountIds) == 0 {
+		return nil
+	}
+	var matchedCount int
+	err := manager.Db.Get(&matchedCount,
+		"SELECT count(*) FROM cloud_accounts WHERE tenant = $1 AND id = ANY($2)",
+		ctx.GetSecurityContext().GetTenantId(), pq.Array(uniqueAccountIds))
+	if err != nil {
+		ctx.GetLogger().Error("Error validating accounts", "error", err)
+		return common.ErrorUnauthorized("Account not found in tenant")
+	}
+	if matchedCount != len(uniqueAccountIds) {
+		return common.ErrorUnauthorized("Account not found in tenant")
+	}
 
-		// validate namespace
-		namespaceRow := manager.Db.QueryRowx("SELECT count(*) FROM k8s_namespaces WHERE cloud_account_id = $1 AND name = $2", role.AccountId, role.Namespace)
-		if namespaceRow.Err() != nil {
-			ctx.GetLogger().Error("Error fetching namespace", "error", namespaceRow.Err())
-			return common.ErrorUnauthorized("Namespace not found in account")
-		}
-		namespace := map[string]any{}
-		err = namespaceRow.MapScan(namespace)
-		if err != nil {
-			ctx.GetLogger().Error("Error scanning namespace", "error", err)
-			return common.ErrorUnauthorized("Namespace not found in account")
-		}
-		if namespace["count"].(int64) == 0 {
+	// Batch-validate (account_id, namespace) pairs by fetching namespaces for the unique
+	// accounts using the indexed cloud_account_id column, then doing composite-key
+	// validation in memory. Avoids `cloud_account_id || '|' || name = ANY(...)` which
+	// bypasses any index on (cloud_account_id, name) and forces a full table scan.
+	var dbNamespaces []struct {
+		CloudAccountId string `db:"cloud_account_id"`
+		Name           string `db:"name"`
+	}
+	err = manager.Db.Select(&dbNamespaces,
+		"SELECT cloud_account_id, name FROM k8s_namespaces WHERE cloud_account_id = ANY($1)",
+		pq.Array(uniqueAccountIds))
+	if err != nil {
+		ctx.GetLogger().Error("Error validating namespaces", "error", err)
+		return common.ErrorUnauthorized("Namespace not found in account")
+	}
+
+	type nsKey struct{ accountId, namespace string }
+	existingNamespaces := make(map[nsKey]bool, len(dbNamespaces))
+	for _, ns := range dbNamespaces {
+		existingNamespaces[nsKey{ns.CloudAccountId, ns.Name}] = true
+	}
+
+	uniqueNsKeys := lo.UniqBy(accountRoles, func(r AccountNamespaceRole) nsKey {
+		return nsKey{r.AccountId, r.Namespace}
+	})
+	for _, r := range uniqueNsKeys {
+		if !existingNamespaces[nsKey{r.AccountId, r.Namespace}] {
 			return common.ErrorUnauthorized("Namespace not found in account")
 		}
 	}
@@ -1228,16 +1241,32 @@ func ManageGroupUsers(ctx *security.RequestContext, request ManageGroupUsersRequ
 		return ManageGroupUsersResponse{}, common.ErrorUnauthorized("Group not found in tenant")
 	}
 
-	// resolve add_usernames to user_ids
+	// resolve add_usernames to user_ids — batch query instead of per-username lookup
 	if len(request.AddUsernames) > 0 {
-		addUserIds := []string{}
+		type userIdUsername struct {
+			Id       string `db:"id"`
+			Username string `db:"username"`
+		}
+		inQuery, inArgs, err := sqlx.In("SELECT id, username FROM users WHERE username IN (?)", request.AddUsernames)
+		if err != nil {
+			return ManageGroupUsersResponse{}, common.ErrorInternal("Error building user lookup query")
+		}
+		inQuery = manager.Db.Rebind(inQuery)
+		var userRows []userIdUsername
+		err = manager.Db.Select(&userRows, inQuery, inArgs...)
+		if err != nil {
+			return ManageGroupUsersResponse{}, common.ErrorInternal("Error looking up users")
+		}
+		usernameToId := lo.SliceToMap(userRows, func(r userIdUsername) (string, string) {
+			return r.Username, r.Id
+		})
+		addUserIds := make([]string, 0, len(request.AddUsernames))
 		for _, username := range request.AddUsernames {
-			var userId string
-			err = manager.Db.Get(&userId, "SELECT id FROM users WHERE username = $1", username)
-			if err != nil {
+			id, ok := usernameToId[username]
+			if !ok {
 				return ManageGroupUsersResponse{}, common.ErrorBadRequest("User not found: " + username)
 			}
-			addUserIds = append(addUserIds, userId)
+			addUserIds = append(addUserIds, id)
 		}
 
 		currentUserId := ctx.GetSecurityContext().GetUserId()
@@ -1270,16 +1299,32 @@ func ManageGroupUsers(ctx *security.RequestContext, request ManageGroupUsersRequ
 		}
 	}
 
-	// resolve remove_usernames to user_ids
+	// resolve remove_usernames to user_ids — batch query instead of per-username lookup
 	if len(request.RemoveUsernames) > 0 {
-		removeUserIds := []string{}
+		type userIdUsername struct {
+			Id       string `db:"id"`
+			Username string `db:"username"`
+		}
+		inQuery, inArgs, err := sqlx.In("SELECT id, username FROM users WHERE username IN (?)", request.RemoveUsernames)
+		if err != nil {
+			return ManageGroupUsersResponse{}, common.ErrorInternal("Error building user lookup query")
+		}
+		inQuery = manager.Db.Rebind(inQuery)
+		var userRows []userIdUsername
+		err = manager.Db.Select(&userRows, inQuery, inArgs...)
+		if err != nil {
+			return ManageGroupUsersResponse{}, common.ErrorInternal("Error looking up users")
+		}
+		usernameToId := lo.SliceToMap(userRows, func(r userIdUsername) (string, string) {
+			return r.Username, r.Id
+		})
+		removeUserIds := make([]string, 0, len(request.RemoveUsernames))
 		for _, username := range request.RemoveUsernames {
-			var userId string
-			err = manager.Db.Get(&userId, "SELECT id FROM users WHERE username = $1", username)
-			if err != nil {
+			id, ok := usernameToId[username]
+			if !ok {
 				return ManageGroupUsersResponse{}, common.ErrorBadRequest("User not found: " + username)
 			}
-			removeUserIds = append(removeUserIds, userId)
+			removeUserIds = append(removeUserIds, id)
 		}
 
 		query, args, err := sqlx.In("DELETE FROM usergroup_users WHERE \"group\" = ? AND \"user\" IN (?)", request.GroupId, removeUserIds)
