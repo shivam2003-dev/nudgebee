@@ -1492,6 +1492,30 @@ func TestWorkflowBuilder_ReadOnlyClassification(t *testing.T) {
 	}
 }
 
+// TestWorkflowBuilder_CurrentContextSection verifies the current-cluster context block (#30162):
+// emitted with a "do not ask which account/cluster" instruction when a context is set, empty otherwise.
+func TestWorkflowBuilder_CurrentContextSection(t *testing.T) {
+	// No context → empty.
+	a := newWorkflowBuilderAgent("acct")
+	assert.Equal(t, "", a.currentContextSection())
+
+	// Name + id → names both and instructs not to ask.
+	a.currentCluster = "prod-eks"
+	a.currentClusterId = "11111111-2222-3333-4444-555555555555"
+	got := a.currentContextSection()
+	assert.Contains(t, got, "CURRENT CONTEXT")
+	assert.Contains(t, got, "prod-eks")
+	assert.Contains(t, got, "account_id=11111111-2222-3333-4444-555555555555")
+	assert.Contains(t, got, "Do NOT ask")
+
+	// Id only (no display name) → falls back to the id as the label, still non-empty.
+	a2 := newWorkflowBuilderAgent("acct")
+	a2.currentClusterId = "abc"
+	got2 := a2.currentContextSection()
+	assert.Contains(t, got2, "CURRENT CONTEXT")
+	assert.Contains(t, got2, "abc")
+}
+
 // TestWorkflowBuilder_BuildPromptHasTriggerPayloadAccess asserts the build
 // prompt teaches the LLM how tasks read trigger payloads — without this,
 // generated automations couldn't reference event/webhook input.
