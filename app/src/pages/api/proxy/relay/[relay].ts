@@ -8,6 +8,11 @@ import crypto from 'crypto';
 import { context, propagation, trace, SpanStatusCode } from '@opentelemetry/api';
 
 const relayEndpoint = process.env.RELAY_SERVER_ENDPOINT ?? 'http://localhost:52832';
+// Allow-list of relay sub-paths. The dynamic `[relay]` route segment is
+// user-controlled, so it must never be interpolated into the outgoing fetch
+// URL without validation (SSRF / path-traversal). These are the only two
+// sub-paths the frontend ever calls (see hitRelayServer in HttpService.ts).
+const ALLOWED_RELAY_PATHS = new Set(['request', 'grafana']);
 const auditEndpoint = process.env.SERVICE_API_SERVER_URL ?? 'http://localhost:8000';
 const secretKey = process.env.RELAY_SERVER_SECRET_KEY ?? '';
 const servicesServerToken = process.env.ACTION_API_SERVER_TOKEN ?? '';
@@ -66,6 +71,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const tracer = trace.getTracer('relay-api');
   const { relay } = req.query;
 
+  // --- SSRF guard: only allow known relay sub-paths ---
+  // `relay` comes from the dynamic route segment and is fully user-controlled.
+  // Reject anything not on the allow-list before it can reach the fetch URL.
+  const relayPath = Array.isArray(relay) ? relay[0] : relay;
+  if (!relayPath || !ALLOWED_RELAY_PATHS.has(relayPath)) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
   // --- Traceparent setup ---
   let traceParent: string;
   const requestIds = req.headers['traceparent'];
@@ -80,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const parentCtx = propagation.extract(context.active(), { traceparent: traceParent });
-  const span = tracer.startSpan(`relay-handler-${relay}`, undefined, parentCtx);
+  const span = tracer.startSpan(`relay-handler-${relayPath}`, undefined, parentCtx);
 
   try {
     await context.with(trace.setSpan(context.active(), span), async () => {
@@ -160,7 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         let attempt = 3;
         while (attempt > 0 && !success) {
-          const response = await fetch(`${relayEndpoint}/${relay}`, {
+          const response = await fetch(`${relayEndpoint}/${relayPath}`, {
             headers,
             body: JSON.stringify(req.body),
             method: 'post',
