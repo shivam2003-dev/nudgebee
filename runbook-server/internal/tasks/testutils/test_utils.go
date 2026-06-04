@@ -171,12 +171,18 @@ func (m *MockWorkflowStore) GetWorkflowVersionByID(ctx context.Context, versionI
 func (m *MockWorkflowStore) GetLiveWorkflowVersion(ctx context.Context, workflowID string) (*model.WorkflowVersion, error) {
 	return nil, nil
 }
-func (m *MockWorkflowStore) PublishVersion(ctx context.Context, workflowID, createdBy string, source model.WorkflowVersionSource, name, description *string, restoredFromVersion *int) (*model.WorkflowVersion, error) {
-	return &model.WorkflowVersion{ID: "mock-version-id", WorkflowID: workflowID, VersionNumber: 1, Source: source}, nil
+func (m *MockWorkflowStore) PublishVersion(ctx context.Context, workflowID, createdBy string, source model.WorkflowVersionSource, name, description *string, restoredFromVersion *int, status model.WorkflowStatus) (*model.WorkflowVersion, error) {
+	return &model.WorkflowVersion{ID: "mock-version-id", WorkflowID: workflowID, VersionNumber: 1, Source: source, Status: status}, nil
 }
 func (m *MockWorkflowStore) SetLiveVersion(ctx context.Context, tenantID, accountID, workflowID, versionID string) error {
 	return nil
 }
+func (m *MockWorkflowStore) SetDraftVersionID(ctx context.Context, tenantID, accountID, workflowID, versionID string) error {
+	return nil
+}
 func (m *MockWorkflowStore) UpdateVersionMetadata(ctx context.Context, workflowID string, versionNumber int, name, description *string) (*model.WorkflowVersion, error) {
 	return nil, nil
+}
+func (m *MockWorkflowStore) UpdateVersionStatus(ctx context.Context, tenantID, accountID, workflowID, versionID string, status model.WorkflowStatus) (bool, error) {
+	return false, nil
 }

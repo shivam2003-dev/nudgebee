@@ -23,10 +23,14 @@ interface WorkflowHeaderProps {
   // State strip (top-right): definition layers + live version + actions.
   showStateStrip?: boolean;
   hasUnsavedChanges?: boolean;
+  /** Draft has changed since the last publish (saved or unsaved). */
   draftAheadOfLive?: boolean;
   liveVersionNumber?: number | null;
   liveVersionName?: string | null;
   liveVersionId?: string | null;
+  draftVersionNumber?: number | null;
+  draftVersionName?: string | null;
+  draftVersionId?: string | null;
   isNewWorkflow?: boolean;
   onPublish?: () => void;
   onHistory?: () => void;
@@ -48,6 +52,9 @@ const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   liveVersionNumber,
   liveVersionName,
   liveVersionId,
+  draftVersionNumber,
+  draftVersionName,
+  draftVersionId,
   isNewWorkflow = false,
   onPublish,
   onHistory,
@@ -196,6 +203,9 @@ const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             liveVersionNumber={liveVersionNumber}
             liveVersionName={liveVersionName}
             liveVersionId={liveVersionId}
+            draftVersionNumber={draftVersionNumber}
+            draftVersionName={draftVersionName}
+            draftVersionId={draftVersionId}
             isNewWorkflow={isNewWorkflow}
             onPublish={onPublish}
             onHistory={onHistory}
