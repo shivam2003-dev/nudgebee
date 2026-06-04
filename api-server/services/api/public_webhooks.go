@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"nudgebee/services/account"
 	"nudgebee/services/common"
 	"nudgebee/services/config"
@@ -176,7 +177,7 @@ func azureEventGridWebhookHandler(tracer *trace.Tracer, meter *metric.Meter, log
 		relayFailed := false
 		for _, rawEvent := range events {
 			relayURL := fmt.Sprintf("%s/v1/cloud/process_azure_eventgrid_events?token=%s",
-				config.Config.CloudCollectorServerUrl, token)
+				config.Config.CloudCollectorServerUrl, url.QueryEscape(token))
 
 			resp, err := common.HttpPost(relayURL,
 				common.HttpWithHeaders(map[string]string{
