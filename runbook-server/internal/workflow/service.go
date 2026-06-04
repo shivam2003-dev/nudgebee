@@ -2805,8 +2805,13 @@ func (s *Service) applyStatusToLiveVersion(ctx *security.RequestContext, account
 	tenantId := ctx.GetSecurityContext().GetTenantId()
 	wf, err := s.store.Find(ctx.GetContext(), tenantId, accountId, id)
 	if err != nil {
+		// Propagate sql.ErrNoRows up so the HTTP handler can return 404 instead
+		// of silently 200ing a pause/resume call on a deleted or wrong-tenant
+		// workflow. The legacy UpdateWorkflowStatus path swallowed ErrNoRows
+		// for idempotency, but PauseWorkflow / ResumeWorkflow are explicit
+		// state-machine transitions and a missing target is a client error.
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil
+			return sql.ErrNoRows
 		}
 		return fmt.Errorf("failed to load workflow for status change: %w", err)
 	}

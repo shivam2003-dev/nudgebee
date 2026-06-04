@@ -1509,25 +1509,28 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
     setAutoFitViewport(viewport || null);
   }, [nodes, edges, workflowData, taskDefinitions]);
 
-  const handleSaveWorkflow = async () => {
+  // Returns true when the save (create or update) was actually persisted.
+  // false signals an early bail or backend failure so callers like the
+  // Publish-confirm path can abort instead of snapshotting a stale draft.
+  const handleSaveWorkflow = async (): Promise<boolean> => {
     try {
       // Block if on JSON tab with invalid JSON
       if (currentMode === 'json' && !jsonValid) {
         snackbar.error('Cannot save: JSON is invalid. Please fix errors or switch to Editor tab.');
-        return;
+        return false;
       }
 
       // Block if on JSON tab with unsaved changes
       if (currentMode === 'json' && jsonHasUnsavedChanges) {
         snackbar.error('Cannot save: You have unapplied JSON changes. Click "Apply" first.');
-        return;
+        return false;
       }
 
       // Validate workflow
       const validationErrors = validateWorkflowForSave(workflowData, nodes, (nodes: Node[]) => extractTasksFromWorkflowNodes(nodes, edges));
       if (validationErrors.length > 0) {
         snackbar.error(`Cannot save automation: ${validationErrors.join(', ')}`);
-        return;
+        return false;
       }
 
       // Validate that sum of task timeouts does not exceed workflow timeout
@@ -1543,7 +1546,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
             snackbar.error(
               'Cannot save: Sum of all task timeouts exceeds the automation timeout. Reduce task timeouts or increase the automation timeout.'
             );
-            return;
+            return false;
           }
         }
       }
@@ -1581,7 +1584,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
         if (errorMessage) {
           snackbar.error(errorMessage);
           console.error('Workflow creation error:', response.errors);
-          return;
+          return false;
         }
 
         const newWorkflowId = response.data?.workflow_create?.id;
@@ -1653,6 +1656,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
           }, 500); // Small delay to ensure router update completes
         } else {
           snackbar.error('Failed to get new automation ID');
+          return false;
         }
       } else {
         // Update existing workflow using utility function
@@ -1672,7 +1676,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
           console.error('Workflow update error:', response.errors);
           console.error('Full error details:', JSON.stringify(response.errors, null, 2));
           console.error('Workflow definition being sent:', workflowDefinition);
-          return;
+          return false;
         }
 
         const updateStatus = response.data?.workflow_update?.definition;
@@ -1724,11 +1728,14 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
           }
         } else {
           snackbar.error('Failed to update automation - no success status returned');
+          return false;
         }
       }
+      return true;
     } catch (error) {
       console.error('Error saving workflow:', error);
       snackbar.error('Error saving automation. Check console for details.');
+      return false;
     }
   };
 
@@ -1852,6 +1859,18 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
     if (!accountId || !workflowId) return;
     setPublishing(true);
     try {
+      // Publish always implies "save + publish". The backend's PublishVersion
+      // snapshots workflows.definition (the saved draft) into a new
+      // workflow_versions row — if the canvas has unsaved edits and we skip
+      // the save here, the published snapshot would be the previous saved
+      // draft, NOT what the user is staring at. Run handleSaveWorkflow first
+      // and abort the publish if it failed so the version never lies.
+      if (hasUnsavedChanges) {
+        const saved = await handleSaveWorkflow();
+        if (!saved) {
+          return;
+        }
+      }
       const response: any = await apiWorkflow.publishWorkflowVersion(accountId, workflowId, {
         name: publishName.trim() || null,
         description: publishDescription.trim() || null,
@@ -1885,7 +1904,12 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
     } finally {
       setPublishing(false);
     }
-  }, [accountId, publishDescription, publishName, publishSetLive, publishStatus, refreshVersions, workflowId]);
+    // handleSaveWorkflow is intentionally NOT in the deps list — it's a plain
+    // function (not useCallback), reborn every render, and adding it would
+    // re-create handleConfirmPublish every render. Closure over the latest
+    // version is fine because handleConfirmPublish is only ever called from a
+    // user click, not held across renders.
+  }, [accountId, hasUnsavedChanges, publishDescription, publishName, publishSetLive, publishStatus, refreshVersions, workflowId]);
 
   // Per-version status mutation, fired from the dropdown next to each row in
   // the version-history drawer. Tracks which version is currently being
@@ -4498,18 +4522,15 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
                                 workflows.status in the same tx. clearable=false
                                 because status must always have a value — DS
                                 Select otherwise renders an inline clear (✕). */}
+                            {/* All three row controls (Select, Make Live, Checkout)
+                                cross-disable on any of the three in-flight markers.
+                                Each mutation reloads workflow data or live pointer,
+                                so concurrent clicks would race on stale UI state. */}
                             <Select
                               size='sm'
                               value={v.status ?? 'PAUSED'}
                               onChange={(next) => handleChangeVersionStatus(v.version_number, next as 'ACTIVE' | 'PAUSED' | 'INACTIVE')}
-                              // Disable ALL rows while any row's status update is in
-                              // flight. statusUpdatingVersionNumber is a single value:
-                              // gating only the in-flight row left every other row
-                              // clickable, so a fast second click could fire a second
-                              // mutation while the first was still pending and the
-                              // first's onSuccess would then clear the in-flight
-                              // marker for the still-pending second.
-                              disabled={statusUpdatingVersionNumber !== null}
+                              disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
                               clearable={false}
                               options={[
                                 { value: 'ACTIVE', label: 'Active' },
@@ -4524,7 +4545,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
                                 tone='primary'
                                 size='sm'
                                 onClick={() => setConfirmLiveVersion(v)}
-                                disabled={settingLive}
+                                disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
                               >
                                 Make Live
                               </Button>
@@ -4534,7 +4555,7 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
                               tone='secondary'
                               size='sm'
                               onClick={() => setConfirmRestoreVersion(v)}
-                              disabled={restoring}
+                              disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
                             >
                               Checkout
                             </Button>

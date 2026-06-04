@@ -1422,8 +1422,11 @@ func (s *WorkflowDao) UpdateVersionStatus(ctx context.Context, tenantID, account
 		return false, sql.ErrNoRows
 	}
 
+	// COALESCE so a workflow with NULL live_version_id (defensive — CreateWorkflow
+	// always sets one, but legacy / corrupted rows could exist) scans as FALSE
+	// instead of failing with `converting NULL to bool is incompatible`.
 	if err = tx.QueryRowContext(ctx, `
-		SELECT (live_version_id = $1) FROM workflows WHERE id = $2 AND tenant_id = $3 AND account_id = $4
+		SELECT COALESCE(live_version_id = $1, FALSE) FROM workflows WHERE id = $2 AND tenant_id = $3 AND account_id = $4
 	`, versionID, workflowID, tenantID, accountID).Scan(&wasLive); err != nil {
 		return false, fmt.Errorf("failed to check live-version match: %w", err)
 	}
