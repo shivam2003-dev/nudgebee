@@ -2048,8 +2048,14 @@ func UpsertCloudResourceAttributes(ctx *security.RequestContext, request CloudRe
 		return CloudResourceAttributesUpsertResponse{}, err
 	}
 
-	if !ctx.GetSecurityContext().IsTenantAdmin() {
-		return CloudResourceAttributesUpsertResponse{}, common.ErrorUnauthorized("Not Allowed")
+	// Gate per object on access to its account. tenant_admin passes for any
+	// account in the tenant; account_admin only for its assigned accounts.
+	// (Replaces a blanket IsTenantAdmin check — this also enforces that each
+	// object's account actually belongs to the caller's tenant.)
+	for _, obj := range request.Objects {
+		if !ctx.GetSecurityContext().HasAccountAccess(obj.AccountId, security.SecurityAccessTypeUpdate) {
+			return CloudResourceAttributesUpsertResponse{}, common.ErrorUnauthorized("Not Allowed")
+		}
 	}
 
 	manager, err := database.GetDatabaseManager(database.Metastore)

@@ -1396,6 +1396,7 @@ actions:
           value_from_env: ACTION_API_SERVER_TOKEN
     permissions:
       - role: tenant_admin
+      - role: account_admin
   - name: accounts_create
     definition:
       kind: synchronous
@@ -1429,6 +1430,7 @@ actions:
           value_from_env: ACTION_API_SERVER_TOKEN
     permissions:
       - role: tenant_admin
+      - role: account_admin
     comment: Upsert cloud resource attributes
   - name: config_delete
     definition:
@@ -1539,6 +1541,7 @@ actions:
       timeout: 300
     permissions:
       - role: tenant_admin
+      - role: account_admin
     comment: Execute inline actions on cloud resources (start/stop/restart/reboot/pause/resume/scale/redeploy/run_command)
   - name: events_update_classification
     definition:
@@ -1937,6 +1940,8 @@ actions:
     permissions:
       - role: tenant_admin
       - role: tenant_admin_readonly
+      - role: account_admin
+      - role: account_admin_readonly
   - name: accounts_list
     definition:
       kind: "synchronous"
