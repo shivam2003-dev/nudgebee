@@ -7,14 +7,14 @@ import (
 
 func TestBuildWorkflowPRLink(t *testing.T) {
 	const (
-		baseURL    = "https://dev.nudgebee.pollux.in"
+		baseURL    = "https://example.com"
 		workflowID = "e2bfadac-f122-4cca-91ef-f1e94da3717f"
 		accountID  = "ff87fbfd-5729-4474-b9d6-96beb693e3fd"
 	)
 
 	t.Run("renders link when all fields present", func(t *testing.T) {
 		got := buildWorkflowPRLink(baseURL, workflowID, accountID)
-		want := "https://dev.nudgebee.pollux.in/workflow/" + workflowID + "?accountId=" + accountID
+		want := "https://example.com/workflow/" + workflowID + "?accountId=" + accountID
 		if !strings.Contains(got, want) {
 			t.Errorf("expected workflow URL %q in output, got:\n%s", want, got)
 		}
@@ -29,7 +29,7 @@ func TestBuildWorkflowPRLink(t *testing.T) {
 		if strings.Contains(got, "in//workflow") {
 			t.Errorf("expected no double slash before /workflow, got:\n%s", got)
 		}
-		want := "https://dev.nudgebee.pollux.in/workflow/" + workflowID + "?accountId=" + accountID
+		want := "https://example.com/workflow/" + workflowID + "?accountId=" + accountID
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q, got:\n%s", want, got)
 		}
