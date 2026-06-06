@@ -4527,51 +4527,69 @@ const WorkflowBuilderNoteBook: React.FC<WorkflowBuilderNotebookProps> = ({ mode 
                               by {author}
                             </Typography>
                           </Box>
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'stretch', flexShrink: 0, minWidth: 130 }}>
-                            {/* Per-version status dropdown (DS Select). Mutating
+                          {/* Version-row write actions (status / Make Live /
+                              Checkout) all mutate the workflow, so hide the
+                              controls from read-only users — but still surface
+                              the version status as a read-only chip so they
+                              don't lose that information. */}
+                          {canEdit ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'stretch', flexShrink: 0, minWidth: 130 }}>
+                              {/* Per-version status dropdown (DS Select). Mutating
                                 any version updates workflow_versions.status; if
                                 the row is live the DAO also mirrors it onto
                                 workflows.status in the same tx. clearable=false
                                 because status must always have a value — DS
                                 Select otherwise renders an inline clear (✕). */}
-                            {/* All three row controls (Select, Make Live, Checkout)
+                              {/* All three row controls (Select, Make Live, Checkout)
                                 cross-disable on any of the three in-flight markers.
                                 Each mutation reloads workflow data or live pointer,
                                 so concurrent clicks would race on stale UI state. */}
-                            <Select
-                              size='sm'
-                              value={v.status ?? 'PAUSED'}
-                              onChange={(next) => handleChangeVersionStatus(v.version_number, next as 'ACTIVE' | 'PAUSED' | 'INACTIVE')}
-                              disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
-                              clearable={false}
-                              options={[
-                                { value: 'ACTIVE', label: 'Active' },
-                                { value: 'PAUSED', label: 'Paused' },
-                                { value: 'INACTIVE', label: 'Inactive' },
-                              ]}
-                              data-testid={`workflow-version-status-select-v${v.version_number}`}
-                            />
-                            {!v.is_live && (
-                              <Button
-                                id={`workflow-make-live-v${v.version_number}-btn`}
-                                tone='primary'
+                              <Select
                                 size='sm'
-                                onClick={() => setConfirmLiveVersion(v)}
+                                value={v.status ?? 'PAUSED'}
+                                onChange={(next) => handleChangeVersionStatus(v.version_number, next as 'ACTIVE' | 'PAUSED' | 'INACTIVE')}
+                                disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
+                                clearable={false}
+                                options={[
+                                  { value: 'ACTIVE', label: 'Active' },
+                                  { value: 'PAUSED', label: 'Paused' },
+                                  { value: 'INACTIVE', label: 'Inactive' },
+                                ]}
+                                data-testid={`workflow-version-status-select-v${v.version_number}`}
+                              />
+                              {!v.is_live && (
+                                <Button
+                                  id={`workflow-make-live-v${v.version_number}-btn`}
+                                  tone='primary'
+                                  size='sm'
+                                  onClick={() => setConfirmLiveVersion(v)}
+                                  disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
+                                >
+                                  Make Live
+                                </Button>
+                              )}
+                              <Button
+                                id={`workflow-restore-v${v.version_number}-btn`}
+                                tone='secondary'
+                                size='sm'
+                                onClick={() => setConfirmRestoreVersion(v)}
                                 disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
                               >
-                                Make Live
+                                Checkout
                               </Button>
-                            )}
-                            <Button
-                              id={`workflow-restore-v${v.version_number}-btn`}
-                              tone='secondary'
-                              size='sm'
-                              onClick={() => setConfirmRestoreVersion(v)}
-                              disabled={statusUpdatingVersionNumber !== null || settingLive || restoring}
-                            >
-                              Checkout
-                            </Button>
-                          </Box>
+                            </Box>
+                          ) : (
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0, minWidth: 130 }}>
+                              <DsChip
+                                size='xs'
+                                variant='status'
+                                tone={v.status === 'ACTIVE' ? 'success' : v.status === 'INACTIVE' ? 'neutral' : 'warning'}
+                                data-testid={`workflow-version-status-chip-v${v.version_number}`}
+                              >
+                                {v.status === 'ACTIVE' ? 'Active' : v.status === 'INACTIVE' ? 'Inactive' : 'Paused'}
+                              </DsChip>
+                            </Box>
+                          )}
                         </Box>
                       );
                     })}
