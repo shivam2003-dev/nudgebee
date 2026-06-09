@@ -1201,7 +1201,11 @@ const KubernetesEventsTable = ({
         let data = [];
         let labels = [];
 
-        res.data.event_groupings.forEach((item) => {
+        // API returns groupings without a guaranteed order, so sort by time
+        // before plotting to keep the trend x-axis chronological.
+        const groupings = [...(res.data.event_groupings || [])].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+        groupings.forEach((item) => {
           data.push(item.event_count);
           labels.push(getDateString(item.created_at));
         });
