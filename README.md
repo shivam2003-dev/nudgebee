@@ -138,7 +138,6 @@ non-local deployment, generate fresh values and review the notes below.
 | `NEXTAUTH_SECRET`                                      | app                         | `openssl rand -base64 32` | Signs both NextAuth session cookies and the inner HS256 session JWT (used by nbctl / Bearer-flow callers). Rotating it logs everyone out and invalidates outstanding bearer tokens.                                   |
 | `NEXTAUTH_DUMMY_CREDS_ENABLED` / `_PASSWORD`           | app                         | —                         | Enables the any-email/password provider. Use for local development only; turn it off in any deployment exposed beyond your laptop.                                                                                    |
 | `RABBIT_MQ_USERNAME` / `_PASSWORD` / `_HOST` / `_PORT` | services-server             | —                         | Compose defaults: `guest` / `guest` / `localhost` / `5672`.                                                                                                                                                           |
-| `CLICKHOUSE_ENABLED`                                   | services-server             | —                         | `false` for the OSS local stack — ClickHouse is not part of compose.                                                                                                                                                  |
 
 ### Troubleshooting
 
@@ -257,19 +256,17 @@ The repo ships a `docker-compose.yaml` that wires every service against the publ
 | `temporal`    | temporalio/auto-setup:1.29.1 | Workflow engine. Backed by `postgres` (creates `temporal` + `temporal_visibility` DBs on first boot). Required by `workflow-server`. |
 | `temporal-ui` | temporalio/ui:2.44.0         | Optional Temporal Web UI at `:8233`.                                                                                                 |
 
-> ClickHouse is intentionally **not** in the local-dev compose. Backend services run with `CLICKHOUSE_ENABLED=false` locally; bring up a `clickhouse` container manually if you're working on analytics-pipeline code.
-
 ### Application services
 
 | Service                            | Min upstream deps                  | Why                                                                                                                                                                   |
 | ---------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api-server-services`              | `postgres`, `rabbitmq`, `redis`    | Core backend. Won't bootstrap RabbitMQ consumers without RabbitMQ; queries fail without Postgres; cache pulls hit Redis. ClickHouse is gated on `CLICKHOUSE_ENABLED`. |
+| `api-server-services`              | `postgres`, `rabbitmq`, `redis`    | Core backend. Won't bootstrap RabbitMQ consumers without RabbitMQ; queries fail without Postgres; cache pulls hit Redis.                                              |
 | `ticket-server`                    | `postgres`, `rabbitmq`             | DB writes + async ticketing sync.                                                                                                                                     |
 | `workflow-server` (runbook-server) | `postgres`, `rabbitmq`, `temporal` | Workflow state in PG; events on RMQ; Temporal SDK calls `Dial(7233)` at startup and crashes if unreachable.                                                           |
 | `notifications-server`             | `postgres`, `rabbitmq`             | Persists messages, consumes RMQ events.                                                                                                                               |
-| `cloud-collector`                  | `rabbitmq`                         | Publishes scrape events to RMQ. ClickHouse writes are skipped when disabled.                                                                                          |
+| `cloud-collector`                  | `rabbitmq`                         | Publishes scrape events to RMQ.                                                                                                                                       |
 | `relay-server`                     | `postgres`, `rabbitmq`             | K8s gateway; tunnel state in PG, events on RMQ.                                                                                                                       |
-| `k8s-collector-app`                | `rabbitmq`                         | Publishes K8s metrics to RMQ. ClickHouse writes skipped when disabled.                                                                                                |
+| `k8s-collector-app`                | `rabbitmq`                         | Publishes K8s metrics to RMQ.                                                                                                                                         |
 | `ml-k8s-server`                    | `postgres`                         | Reads/writes scaling features.                                                                                                                                        |
 | `llm-server`                       | `postgres`, `qdrant`               | LLM session state + vector lookups. Spawns `code-analysis` per account on demand (not a long-running compose service).                                                |
 | `rag-server`                       | `postgres`, `qdrant`               | RAG retrieval against Qdrant; metadata in PG.                                                                                                                         |
@@ -284,7 +281,7 @@ The repo ships a `docker-compose.yaml` that wires every service against the publ
 
 - **DB exploration:** `postgres` (connect with `psql` / DBeaver).
 - **Login + dashboard render:** `postgres` + `api-server-services` + `app` (pulls RabbitMQ/Redis transitively).
-- **Cloud findings pipeline:** add `rabbitmq` + `cloud-collector` (start a manual `clickhouse` container too if you want findings persisted; set `CLICKHOUSE_ENABLED=true` in backend env).
+- **Cloud findings pipeline:** add `rabbitmq` + `cloud-collector`.
 - **LLM/RAG flows:** add `qdrant` + `llm-server` + `rag-server`.
 
 Start a subset with `docker compose up -d <service> [<service> ...]` (or `podman-compose up -d ...`); transitive deps are pulled in automatically via `depends_on`.

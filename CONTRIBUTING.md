@@ -7,6 +7,13 @@ merged.
 By contributing, you agree that your contributions will be licensed
 under the Apache License, Version 2.0 (see [LICENSE](./LICENSE)).
 
+> **New here?** Two fast paths in before this doc:
+>
+> - **Want to get the stack running?** → [README → Quick Start](./README.md#quick-start-local-development) (or the shorter [docs/QUICKSTART.md](./docs/QUICKSTART.md)).
+> - **Want to understand what fits where?** → [README → Architecture](./README.md#architecture) (or [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for the deep-dive entry points).
+>
+> Then come back here for the workflow (fork → branch → validate → PR).
+
 ## Contributor License Agreement (CLA)
 
 Before your first PR can be merged, you'll be asked to sign our
