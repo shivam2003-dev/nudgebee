@@ -29,15 +29,14 @@ var kubectlStderrNoisePrefixes = []string{
 	"Unable to use a TTY",   // exec without TTY notice
 }
 
-// stripKubectlStderrNoise removes leading kubectl stderr notice lines from a
-// merged stdout/stderr blob. It only removes a *prefix* of consecutive noise lines
-// so that real output below them is preserved untouched. If the entire response
-// turns out to be noise (i.e. the actual stdout was empty), the result is the
-// empty string — which the LLM should interpret as "command produced no output",
-// the correct semantics for e.g. `grep ERROR` finding no matches.
-func stripKubectlStderrNoise(response string) string {
+// splitKubectlStderrNoise separates a leading prefix of kubectl stderr notice
+// lines from the real stdout in a merged stdout/stderr blob. The workspace
+// /execute handler points cmd.Stdout and cmd.Stderr at the same buffer, so
+// without splitting we'd either lose the notices (silent stderr) or mistake
+// them for the only output (breaks "empty grep result is the correct answer").
+func splitKubectlStderrNoise(response string) (stdout, stderr string) {
 	if response == "" {
-		return response
+		return "", ""
 	}
 	lines := strings.Split(response, "\n")
 	i := 0
@@ -56,9 +55,9 @@ func stripKubectlStderrNoise(response string) string {
 		i++
 	}
 	if i == 0 {
-		return response
+		return response, ""
 	}
-	return strings.Join(lines[i:], "\n")
+	return strings.Join(lines[i:], "\n"), strings.Join(lines[:i], "\n")
 }
 
 func init() {
@@ -525,19 +524,14 @@ func (m KubectlExecuteTool) Call(nbRequestContext core.NbToolContext, input core
 			}, err
 		}
 
-		// Strip kubectl stderr noise that the workspace pod merges into stdout.
-		// The workspace /execute handler points cmd.Stdout and cmd.Stderr at the same
-		// buffer, so kubectl notices like `Defaulted container "x" out of: ...` and
-		// `Warning: ...` (deprecation/version notices) end up labeled as stdout. The
-		// LLM then interprets this as "tool produced no real output" and gives up,
-		// which is wrong — especially for piped commands like
-		// `kubectl logs ... | grep ERROR | tail -10` where an empty grep result is the
-		// correct answer ("no errors found").
-		response = stripKubectlStderrNoise(response)
+		stdout, stderr := splitKubectlStderrNoise(response)
 
-		// Wrap in JSON to be consistent with non-workspace mode and allow agents to parse it
+		// Wrap stdout in JSON for consistency with non-workspace mode and to
+		// let agents parse it. Stderr is intentionally NOT packed into this
+		// envelope — it travels via Metadata.Stderr so it stays out of the
+		// observation text the UI renders (and isn't tool-specific anymore).
 		outputformat := map[string]string{
-			"stdout": response,
+			"stdout": stdout,
 		}
 		outputformatBytes, err := common.MarshalJson(outputformat)
 		if err != nil {
@@ -549,12 +543,16 @@ func (m KubectlExecuteTool) Call(nbRequestContext core.NbToolContext, input core
 		}
 		response = string(outputformatBytes)
 
-		return core.NBToolResponse{
+		resp := core.NBToolResponse{
 			Data:       response,
 			Type:       core.NBToolResponseTypeText,
 			Status:     core.NBToolResponseStatusSuccess,
 			References: []core.NBToolResponseReference{kubectlUIRef(nbRequestContext, command)},
-		}, nil
+		}
+		if stderr != "" {
+			resp.Metadata = &core.NBToolResponseMetadata{Stderr: stderr}
+		}
+		return resp, nil
 	}
 
 	response, err := ExecuteContainerJob(nbRequestContext, RelayJobKubectl, command, effectiveAccountId, map[string]any{}, false)

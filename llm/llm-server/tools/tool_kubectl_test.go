@@ -6,6 +6,29 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestSplitKubectlStderrNoise(t *testing.T) {
+	cases := []struct {
+		name       string
+		response   string
+		wantStdout string
+		wantStderr string
+	}{
+		{"empty input", "", "", ""},
+		{"no noise unchanged", "pod-1   Running\npod-2   Running", "pod-1   Running\npod-2   Running", ""},
+		{"defaulted-container notice split", "Defaulted container \"app\" out of: app, sidecar\nhello world", "hello world", "Defaulted container \"app\" out of: app, sidecar"},
+		{"multiple noise prefixes split together", "Warning: A is deprecated\nW0406 12:00:00 klog warning\nreal output", "real output", "Warning: A is deprecated\nW0406 12:00:00 klog warning"},
+		{"all noise — stdout empty", "Warning: A is deprecated\nWarning: B is deprecated", "", "Warning: A is deprecated\nWarning: B is deprecated"},
+		{"trailing notices stay with stdout", "real output\nWarning: trailing notice stays with stdout", "real output\nWarning: trailing notice stays with stdout", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr := splitKubectlStderrNoise(tc.response)
+			assert.Equal(t, tc.wantStdout, stdout, "stdout mismatch")
+			assert.Equal(t, tc.wantStderr, stderr, "stderr mismatch")
+		})
+	}
+}
+
 func TestKubectlResourceKind(t *testing.T) {
 	cases := []struct {
 		name    string

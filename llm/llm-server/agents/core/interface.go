@@ -193,6 +193,12 @@ type NBAgentPlannerToolActionStep struct {
 	IsTerminal  bool                               `json:"is_terminal"`
 	References  []toolcore.NBToolResponseReference `json:"references"`
 	Followup    *FollowupRequest                   `json:"followup,omitempty"`
+	// Metadata carries tool-execution telemetry (exit status, duration,
+	// stderr, truncation) used by the prompt-assembly seams to append a
+	// trailing `[exitStatus: N | executionDuration: Xms]` footer to the
+	// observation text — without baking the footer into Observation itself
+	// (which would also leak it to the UI render of the response column).
+	Metadata *toolcore.NBToolResponseMetadata `json:"metadata,omitempty"`
 	// CompressedObservation caches the LLM-generated summary for this step's observation.
 	// Computed once when the step is first compressed, then reused across subsequent
 	// scratchpad builds to avoid redundant LLM calls.

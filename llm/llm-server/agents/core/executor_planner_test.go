@@ -987,46 +987,102 @@ func TestTruncateToolResponse(t *testing.T) {
 	config.Config.LlmServerMaxToolOutputLen = 30000
 	config.Config.LlmServerMaxToolErrorOutputLen = 10000
 
-	t.Run("success under limit returns unchanged", func(t *testing.T) {
+	t.Run("success under limit returns unchanged + reports original length", func(t *testing.T) {
 		data := "small observation"
-		got := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
+		got, origLen := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
 		assert.Equal(t, data, got)
+		assert.Equal(t, len(data), origLen)
 	})
 
-	t.Run("success over limit gets truncated", func(t *testing.T) {
+	t.Run("success over limit gets truncated + origLen is pre-truncation size", func(t *testing.T) {
 		data := strings.Repeat("x", 50000)
-		got := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
+		got, origLen := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
 		assert.Less(t, len(got), len(data))
 		assert.LessOrEqual(t, len(got), 30500) // cap + truncation marker overhead
 		assert.Contains(t, got, "TRUNCATED")
+		assert.Equal(t, 50000, origLen)
 	})
 
 	t.Run("failure over limit uses smaller error cap", func(t *testing.T) {
 		data := strings.Repeat("stack trace line\n", 2000)
-		got := truncateToolResponse(nil, data, ToolStatusFailure, "tool")
+		got, origLen := truncateToolResponse(nil, data, ToolStatusFailure, "tool")
 		assert.LessOrEqual(t, len(got), 10500)
 		assert.Contains(t, got, "TRUNCATED")
+		assert.Equal(t, len(data), origLen)
 	})
 
 	t.Run("empty sentinel values are never truncated", func(t *testing.T) {
-		assert.Equal(t, "", truncateToolResponse(nil, "", ToolStatusSuccess, "tool"))
-		assert.Equal(t, plannerToolNoData, truncateToolResponse(nil, plannerToolNoData, ToolStatusSuccess, "tool"))
-		assert.Equal(t, "[]", truncateToolResponse(nil, "[]", ToolStatusSuccess, "tool"))
+		got, origLen := truncateToolResponse(nil, "", ToolStatusSuccess, "tool")
+		assert.Equal(t, "", got)
+		assert.Equal(t, 0, origLen)
+		got, _ = truncateToolResponse(nil, plannerToolNoData, ToolStatusSuccess, "tool")
+		assert.Equal(t, plannerToolNoData, got)
+		got, _ = truncateToolResponse(nil, "[]", ToolStatusSuccess, "tool")
+		assert.Equal(t, "[]", got)
 	})
 
 	t.Run("limit of zero disables truncation", func(t *testing.T) {
 		config.Config.LlmServerMaxToolOutputLen = 0
 		data := strings.Repeat("x", 100000)
-		got := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
+		got, _ := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
 		assert.Equal(t, data, got)
 		config.Config.LlmServerMaxToolOutputLen = 30000
 	})
 
 	t.Run("preserves head and tail of the data", func(t *testing.T) {
 		data := "HEADER_START" + strings.Repeat("x", 50000) + "FOOTER_END"
-		got := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
+		got, _ := truncateToolResponse(nil, data, ToolStatusSuccess, "tool")
 		assert.True(t, strings.HasPrefix(got, "HEADER_START"))
 		assert.True(t, strings.HasSuffix(got, "FOOTER_END"))
+	})
+}
+
+func TestToolStatusToExitCode(t *testing.T) {
+	cases := []struct {
+		name   string
+		status ToolStatus
+		want   int
+	}{
+		{"success", ToolStatusSuccess, 0},
+		{"failure", ToolStatusFailure, 1},
+		{"empty result", ToolStatusEmptyResult, 2},
+		{"unknown defaults to success", ToolStatus("weird"), 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, toolStatusToExitCode(tc.status))
+		})
+	}
+}
+
+func TestFormatToolMetadataFooter(t *testing.T) {
+	cases := []struct {
+		name string
+		md   *toolcore.NBToolResponseMetadata
+		want string
+	}{
+		{"nil metadata renders nothing", nil, ""},
+		{"success", &toolcore.NBToolResponseMetadata{ExitStatus: 0, ExecutionDurationMs: 123}, "\n[exitStatus: 0 | executionDuration: 123ms]"},
+		{"failure", &toolcore.NBToolResponseMetadata{ExitStatus: 1, ExecutionDurationMs: 45}, "\n[exitStatus: 1 | executionDuration: 45ms]"},
+		{"empty result", &toolcore.NBToolResponseMetadata{ExitStatus: 2, ExecutionDurationMs: 8}, "\n[exitStatus: 2 | executionDuration: 8ms]"},
+		{"negative duration clamps to 0", &toolcore.NBToolResponseMetadata{ExitStatus: 0, ExecutionDurationMs: -1}, "\n[exitStatus: 0 | executionDuration: 0ms]"},
+		{"multi-second renders as ms", &toolcore.NBToolResponseMetadata{ExitStatus: 0, ExecutionDurationMs: 3200}, "\n[exitStatus: 0 | executionDuration: 3200ms]"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, formatToolMetadataFooter(tc.md))
+		})
+	}
+}
+
+func TestRenderObservationWithMetadata(t *testing.T) {
+	t.Run("nil metadata returns observation unchanged", func(t *testing.T) {
+		assert.Equal(t, "raw output", renderObservationWithMetadata("raw output", nil))
+	})
+	t.Run("metadata appended at the end", func(t *testing.T) {
+		md := &toolcore.NBToolResponseMetadata{ExitStatus: 1, ExecutionDurationMs: 42}
+		got := renderObservationWithMetadata("raw output", md)
+		assert.Equal(t, "raw output\n[exitStatus: 1 | executionDuration: 42ms]", got)
 	})
 }
 
