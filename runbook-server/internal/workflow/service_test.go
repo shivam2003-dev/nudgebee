@@ -233,6 +233,19 @@ func TestMultipleSchedules(t *testing.T) {
 
 	sc := security.NewRequestContextForTenantAccountAdmin("test-tenant", "test-user", []string{"test-account"})
 
+	// Scheduled runs bake the LIVE version's definition, so handleWorkflowTrigger
+	// resolves it for every workflow that has a schedule trigger. The schedule's
+	// cron/ID assertions don't depend on the baked definition, so a single generic
+	// live version satisfies every sub-test here.
+	mockStore.On("GetLiveWorkflowVersion", mock.Anything, mock.Anything).Return(&model.WorkflowVersion{
+		ID:            "live-v",
+		VersionNumber: 1,
+		IsLive:        true,
+		Definition: model.WorkflowDefinition{
+			Tasks: []model.Task{{ID: "task1", Type: "scripting.run_script", Params: map[string]any{"script": "echo"}}},
+		},
+	}, nil)
+
 	t.Run("Create Workflow with Multiple Schedules", func(t *testing.T) {
 		wf := model.Workflow{
 			Name: "multi-schedule",

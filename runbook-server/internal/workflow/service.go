@@ -552,6 +552,12 @@ func (s *Service) handleWorkflowTrigger(ctx *security.RequestContext, id, tenant
 	var webhookToken string
 	scheduleCount := 0
 
+	// Live execution snapshot for scheduled runs, resolved lazily on the first
+	// schedule trigger so webhook-only workflows skip the lookup. Scheduled runs
+	// must bake and execute the live version, not the draft (H1).
+	var liveExecDef *model.WorkflowDefinition
+	var liveVersionMemo map[string]any
+
 	// Process all triggers
 	for i, trigger := range wf.Definition.Triggers {
 		switch trigger.Type {
@@ -581,9 +587,18 @@ func (s *Service) handleWorkflowTrigger(ctx *security.RequestContext, id, tenant
 				if wf.Status == model.WorkflowStatusInactive {
 					// Logic to remove schedules handled below
 				} else {
-					// Create or update this specific schedule
+					// Create or update this specific schedule. Resolve the live
+					// version once (the schedule executes it, not the draft) and
+					// reuse it across every schedule trigger on this workflow.
+					if liveExecDef == nil {
+						d, m, rerr := s.resolveLiveExecution(ctx.GetContext(), id)
+						if rerr != nil {
+							return nil, "", rerr
+						}
+						liveExecDef, liveVersionMemo = &d, m
+					}
 					paused := wf.Status == model.WorkflowStatusPaused
-					err := s.createOrUpdateSchedule(ctx.GetContext(), id, tenantId, accountId, wf, scheduleCount, cron, overlapPolicy, catchupWindow, inputs, paused)
+					err := s.createOrUpdateSchedule(ctx.GetContext(), id, tenantId, accountId, wf, scheduleCount, cron, overlapPolicy, catchupWindow, inputs, paused, *liveExecDef, liveVersionMemo)
 					if err != nil {
 						return nil, "", fmt.Errorf("failed to create or update schedule index %d: %w", scheduleCount, err)
 					}
@@ -689,7 +704,7 @@ func (s *Service) handleWorkflowTrigger(ctx *security.RequestContext, id, tenant
 	return nil, webhookToken, nil
 }
 
-func (s *Service) createOrUpdateSchedule(ctx context.Context, workflowID string, tenantId, accountId string, wf *model.Workflow, index int, cron, overlapPolicy, catchupWindow string, inputs map[string]any, paused bool) error {
+func (s *Service) createOrUpdateSchedule(ctx context.Context, workflowID string, tenantId, accountId string, wf *model.Workflow, index int, cron, overlapPolicy, catchupWindow string, inputs map[string]any, paused bool, execDef model.WorkflowDefinition, versionMemo map[string]any) error {
 	if tenantId == "" || accountId == "" {
 		return fmt.Errorf("tenantId and accountId are required for scheduling")
 	}
@@ -720,12 +735,18 @@ func (s *Service) createOrUpdateSchedule(ctx context.Context, workflowID string,
 	wfCopy.AccountID = accountId
 	wfCopy.TenantID = tenantId
 
+	// Bake the LIVE version's definition into the schedule action: scheduled runs
+	// execute the published version, never the draft (workflows.definition). The
+	// trigger config (cron/inputs) still comes from the draft trigger that drove
+	// this call — only the executed graph is pinned to the live version.
+	wfCopy.Definition = execDef
+
 	ensureUpdatedByUser(&wfCopy)
 
 	// IMPORTANT: Deep copy Inputs slice because we will modify elements within it
-	if wf.Definition.Inputs != nil {
-		newInputs := make([]model.Input, len(wf.Definition.Inputs))
-		copy(newInputs, wf.Definition.Inputs)
+	if execDef.Inputs != nil {
+		newInputs := make([]model.Input, len(execDef.Inputs))
+		copy(newInputs, execDef.Inputs)
 		wfCopy.Definition.Inputs = newInputs
 	}
 
@@ -755,6 +776,9 @@ func (s *Service) createOrUpdateSchedule(ctx context.Context, workflowID string,
 		Args:                  []any{&wfCopy, inputs},
 		TaskQueue:             config.Config.RunbookServerTemporalQueue,
 		TypedSearchAttributes: temporal.NewSearchAttributes(typedSAs...),
+		// Stamp the live version linkage so scheduled executions show the correct
+		// version banner and are retryable, exactly like ExecuteWorkflow runs.
+		Memo: versionMemo,
 	}
 
 	spec := client.ScheduleSpec{
@@ -855,6 +879,25 @@ func setTriggeredByUser(wf *model.Workflow, triggererID string) {
 	}
 }
 
+// resolveLiveExecution loads a workflow's live version and returns the definition
+// to execute plus the version-linkage Memo. It is the single resolver every
+// server-side path that must run the live version shares — manual / webhook /
+// event / optimization (ExecuteWorkflow) and scheduled-run registration
+// (handleWorkflowTrigger) — so they stay byte-for-byte consistent. A workflow
+// with no resolvable live version is a real inconsistency (CreateWorkflow
+// publishes v1 + marks it live in one txn), so callers should fail loudly here
+// rather than silently fall back to the draft.
+func (s *Service) resolveLiveExecution(ctx context.Context, id string) (model.WorkflowDefinition, map[string]any, error) {
+	liveVersion, err := s.store.GetLiveWorkflowVersion(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.WorkflowDefinition{}, nil, fmt.Errorf("workflow %s has no live version", id)
+		}
+		return model.WorkflowDefinition{}, nil, fmt.Errorf("failed to load live workflow version for %s: %w", id, err)
+	}
+	return liveVersion.Definition, model.WorkflowVersionMemo(liveVersion), nil
+}
+
 func (s *Service) ExecuteWorkflow(ctx *security.RequestContext, accountId, id string, triggerType model.WorkflowTrigger, inputs map[string]any) (string, error) {
 	if !ctx.GetSecurityContext().HasAccountAccess(accountId, security.SecurityAccessTypeCreate) {
 		return "", common.ErrorUnauthorized("account not accessible")
@@ -886,22 +929,14 @@ func (s *Service) ExecuteWorkflow(ctx *security.RequestContext, accountId, id st
 	if wf.LiveVersionID == nil || *wf.LiveVersionID == "" {
 		return "", fmt.Errorf("workflow %s has no live version", id)
 	}
-	liveVersion, err := s.store.GetLiveWorkflowVersion(ctx.GetContext(), id)
+	execDef, memo, err := s.resolveLiveExecution(ctx.GetContext(), id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", fmt.Errorf("workflow %s live version (%s) not found", id, *wf.LiveVersionID)
-		}
-		return "", fmt.Errorf("failed to load live workflow version: %w", err)
+		return "", err
 	}
 
-	// Run the live version snapshot and stamp its identity into Memo so the
+	// Run the live version snapshot; the Memo stamps its identity so the
 	// execution detail UI can render exactly what ran.
-	wf.Definition = liveVersion.Definition
-	memo := map[string]any{
-		model.MemoWorkflowVersionID:     liveVersion.ID,
-		model.MemoWorkflowVersionNumber: int64(liveVersion.VersionNumber),
-		model.MemoWorkflowVersionName:   strDerefOrEmpty(liveVersion.Name),
-	}
+	wf.Definition = execDef
 	return s.runWorkflow(ctx, accountId, id, wf, memo, triggerType, inputs)
 }
 
@@ -1156,13 +1191,6 @@ func (s *Service) FanOutWebhookEvent(ctx *security.RequestContext, integrationNa
 	}
 
 	return result, nil
-}
-
-func strDerefOrEmpty(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }
 
 func (s *Service) RetriggerWorkflowExecution(ctx *security.RequestContext, accountId, workflowId, executionId string, inputs map[string]any) (string, error) {
@@ -4291,6 +4319,17 @@ func (s *Service) SetLiveWorkflowVersion(ctx *security.RequestContext, accountId
 	if err != nil {
 		return wf, err
 	}
+
+	// Re-sync Temporal so scheduled runs follow the rolled-back live version.
+	// SetLiveVersion only moves the DB live pointer; without this the Temporal
+	// schedule keeps executing the previously-baked version's definition and
+	// paused-state (H3). handleWorkflowTrigger re-bakes from the new live version
+	// (via createOrUpdateSchedule's resolver) and re-applies the runtime gate —
+	// mirroring what UpdateWorkflowVersionStatus already does for the live version.
+	if _, _, err := s.handleWorkflowTrigger(ctx, id, ctx.GetSecurityContext().GetTenantId(), accountId, wf); err != nil {
+		return wf, fmt.Errorf("failed to re-sync triggers after set-live: %w", err)
+	}
+
 	emitWorkflowAudit(
 		ctx, accountId,
 		audit.EventTypeAutorunbookUpdate, audit.EventActionUpdate, audit.EventStatusSuccess,
