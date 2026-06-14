@@ -8,11 +8,22 @@ import path from 'path';
 // process lifetime. Only a default-path miss (no tenant branding configured) is cached.
 let _loaded = false;
 let _value = null;
+// Timestamp of the last failed read attempt. Retries after a failure are throttled to
+// once per RETRY_COOLDOWN_MS so a persistently misconfigured path (typo / bad perms /
+// invalid JSON) can't run a blocking fs.readFileSync on every SSR request — which would
+// stall the single-threaded event loop under load. Transient failures still self-heal,
+// just within the cooldown window rather than on the very next render.
+let _lastAttemptMs = 0;
 
 const DEFAULT_BRANDING_PATH = 'branding/default/theme.json';
+const RETRY_COOLDOWN_MS = 10_000;
 
 export default function loadBrandingFile() {
   if (_loaded) return _value;
+
+  const now = Date.now();
+  if (now - _lastAttemptMs < RETRY_COOLDOWN_MS) return _value;
+  _lastAttemptMs = now;
 
   const filePath = process.env.TENANT_BRANDING_FILE || DEFAULT_BRANDING_PATH;
   const isDefault = filePath === DEFAULT_BRANDING_PATH;

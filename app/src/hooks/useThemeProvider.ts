@@ -7,10 +7,19 @@ import { useBrandingConfig } from './useTenantBranding';
 // Server-side only: load branding file color tokens once for SSR critical CSS.
 let _ssrBrandingTokens: Record<string, string> | null = null;
 let _ssrBrandingLoaded = false;
+// Throttle retries after a failed read (see loadBrandingFile.js): a persistently
+// misconfigured TENANT_BRANDING_FILE must not run a blocking fs.readFileSync on every
+// SSR request and stall the event loop. Transient failures self-heal within the window.
+let _ssrLastAttemptMs = 0;
+const SSR_BRANDING_RETRY_COOLDOWN_MS = 10_000;
 
 function loadSSRBrandingTokens(): Record<string, string> | null {
   if (typeof window !== 'undefined') return null;
   if (_ssrBrandingLoaded) return _ssrBrandingTokens;
+
+  const now = Date.now();
+  if (now - _ssrLastAttemptMs < SSR_BRANDING_RETRY_COOLDOWN_MS) return _ssrBrandingTokens;
+  _ssrLastAttemptMs = now;
 
   const filePath = process.env.TENANT_BRANDING_FILE;
   // No branding configured — cache the (permanent) miss and return defaults.
