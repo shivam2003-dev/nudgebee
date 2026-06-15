@@ -394,10 +394,16 @@ func (a *OrchestratorAgent) Execute(ctx context.Context, request NBAgentRequest)
 	hasWriteInstruction := instructionsRequireWrite(factsData)
 	if !hasWriteInstruction {
 		if filePath, ok := factsData["file_path"].(string); ok && filePath != "" && workDir != "" {
-			fullPath := filepath.Join(workDir, filePath)
+			// Normalize a possible leading "<repoName>/" segment (ripgrep-relative
+			// paths the RCA copies into file_path) before the existence check so the
+			// gate doesn't double the segment and false-skip CodeFixer. See
+			// repoRelativeFilePath for the full rationale.
+			checkPath := repoRelativeFilePath(workDir, filePath)
+			fullPath := filepath.Join(workDir, checkPath)
 			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 				a.logger.Log(common.EventStepComplete, "Skipping CodeFixer - file_path does not exist in repo", map[string]any{
 					"file_path":     filePath,
+					"check_path":    checkPath,
 					"workspace_dir": workDir,
 				})
 
@@ -2430,6 +2436,31 @@ func instructionsRequireWrite(factsData map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// repoRelativeFilePath normalizes an RCA-emitted file_path so it can be joined
+// to the repo root (workDir). ripgrep runs from the parent temp dir and returns
+// matches with a leading "<repoName>/" segment, which the RCA copies verbatim
+// into file_path. workDir is already the repo root, so a raw filepath.Join
+// doubles the segment (".../<repoName>/<repoName>/...") and os.Stat then reports
+// the file missing. Strip a single leading "<repoName>/" the same way the fixer
+// tools (replace, write_file, file_view) already do, keeping the orchestrator's
+// pre-flight existence check consistent with them.
+func repoRelativeFilePath(workDir, filePath string) string {
+	if workDir == "" || filePath == "" {
+		return filePath
+	}
+	repoName := filepath.Base(workDir)
+	if repoName == "" || repoName == "." || repoName == string(filepath.Separator) {
+		return filePath
+	}
+	// Handle both forward and backward slashes to ensure cross-platform compatibility
+	slashedPath := filepath.ToSlash(filePath)
+	trimmed := strings.TrimPrefix(slashedPath, repoName+"/")
+	if strings.Contains(filePath, "\\") {
+		return filepath.FromSlash(trimmed)
+	}
+	return trimmed
 }
 
 // generateBranchName creates an intelligent branch name based on the issue title.
