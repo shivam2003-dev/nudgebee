@@ -281,7 +281,7 @@ func init() {
 	viper.SetDefault("gcp_project_id", "")
 	viper.SetDefault("cloud_collector_gcp_pubsub_subscription_id", "")
 
-	viper.SetDefault("cloud_collector_server_url", "http://cloud-collector-servert:8000")
+	viper.SetDefault("cloud_collector_server_url", "http://cloud-collector-server:8000")
 	viper.SetDefault("cloud_collector_server_token", "")
 	viper.SetDefault("cloud_collector_server_token_header", "X-ACTION-TOKEN")
 
