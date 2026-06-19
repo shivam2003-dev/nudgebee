@@ -7,7 +7,7 @@ import os
 def setup_logger() -> None:
     # Get the path to the logging config file from the environment variable
     config_file_path = os.getenv("LOGGING_CONFIG_FILE")
-    print(f"LOGGING_CONFIG_FILE: {config_file_path}")  # Debugging to see the file path
+    logging.debug("LOGGING_CONFIG_FILE: %s", config_file_path)
 
     if config_file_path:
         try:
