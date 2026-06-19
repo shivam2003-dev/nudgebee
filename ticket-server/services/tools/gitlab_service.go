@@ -289,11 +289,14 @@ func (s *GitLabService) List(ctx *gin.Context, config models.TicketConfiguration
 		return nil, fmt.Errorf("failed to create GitLab client: %w", err)
 	}
 
-	// Convert offset/limit to page/perPage using local variables to avoid
-	// mutating the caller's struct. GitLab caps PerPage at 100 server-side,
-	// so we cap here too so the page calculation matches what is actually returned.
-	limit := normalizeLimit(params.Limit)
-	offset := normalizeOffset(params.Offset)
+	// Normalize offset/limit in-place. params is passed by value, so mutating
+	// its fields is safe and keeps the returned ListResult consistent with the
+	// page size actually used. GitLab caps PerPage at 100 server-side, so we cap
+	// here too so the page calculation matches.
+	params.Limit = normalizeLimit(params.Limit)
+	params.Offset = normalizeOffset(params.Offset)
+	limit := params.Limit
+	offset := params.Offset
 	page := (offset / limit) + 1
 
 	opts := &gitlab.ListProjectIssuesOptions{
