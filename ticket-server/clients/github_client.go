@@ -16,6 +16,9 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// githubHTTPTimeout is the timeout for ad-hoc GitHub App HTTP requests.
+const githubHTTPTimeout = 30 * time.Second
+
 func CreateGithubClient(password string) *github.Client {
 	client := github.NewClient(nil).WithAuthToken(password)
 	return client
@@ -78,7 +81,7 @@ func GetGithubAppInstallationToken(ctx context.Context, installationID int64) (s
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: githubHTTPTimeout,
 	}
 	resp, err := client.Do(req)
 	if err != nil {
