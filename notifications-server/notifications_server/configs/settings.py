@@ -592,6 +592,9 @@ class NotificationSettings(BaseSettings):
     grouped_redis_ttl_seconds: int = Field(
         3900, validation_alias=AliasChoices("GROUPED_REDIS_TTL_SECONDS", "grouped_redis_ttl_seconds")
     )
+    event_cache_ttl_seconds: int = Field(
+        7200, validation_alias=AliasChoices("CACHE_ENTRY_TTL_SECONDS", "cache_entry_ttl_seconds")
+    )
 
     model_config = SettingsConfigDict(env_prefix="")
 
