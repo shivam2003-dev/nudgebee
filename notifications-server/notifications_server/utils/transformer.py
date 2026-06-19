@@ -468,7 +468,7 @@ class Transformer:
             decoded_data = base64.b64decode(encoded_data)
             return gzip.decompress(decoded_data)
         except Exception as e:
-            print(f"Error extracting text: {e}")
+            LOG.error("Error extracting text: %s", e)
             return None
 
     @staticmethod
@@ -478,7 +478,7 @@ class Transformer:
             decoded_data = base64.b64decode(encoded_data)
             return decoded_data
         except Exception as e:
-            print(f"Error extracting text: {e}")
+            LOG.error("Error extracting text: %s", e)
             return None
 
     @staticmethod
