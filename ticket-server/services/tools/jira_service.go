@@ -729,6 +729,19 @@ func AddCustomTicketComment(configuration models.TicketConfigurations, ticketId,
 	return fetchCommentsFromJira(ticketId, jiraClient)
 }
 
+// jqlDateLayout is the date format accepted for JQL date filters.
+const jqlDateLayout = "2006-01-02"
+
+// validateJQLDate ensures a date filter value parses as YYYY-MM-DD before it is
+// interpolated into the JQL, so a malformed value returns a clear, field-specific
+// error instead of a cryptic Jira search failure.
+func validateJQLDate(field, value string) error {
+	if _, err := time.Parse(jqlDateLayout, value); err != nil {
+		return fmt.Errorf("invalid %s: %q must be in YYYY-MM-DD format", field, value)
+	}
+	return nil
+}
+
 // List retrieves tickets from Jira using JQL search.
 func (s *JiraService) List(ctx *gin.Context, config models.TicketConfigurations, params models.ListParams) (*models.ListResult, error) {
 	jiraClient, err := clients.CreateJiraClient(config.Username, config.Password, config.URL)
@@ -750,9 +763,15 @@ func (s *JiraService) List(ctx *gin.Context, config models.TicketConfigurations,
 		jqlParts = append(jqlParts, fmt.Sprintf("assignee = %q", params.Assignee))
 	}
 	if params.CreatedAfter != "" {
+		if err := validateJQLDate("created_after", params.CreatedAfter); err != nil {
+			return nil, err
+		}
 		jqlParts = append(jqlParts, fmt.Sprintf("created >= %q", params.CreatedAfter))
 	}
 	if params.CreatedBefore != "" {
+		if err := validateJQLDate("created_before", params.CreatedBefore); err != nil {
+			return nil, err
+		}
 		jqlParts = append(jqlParts, fmt.Sprintf("created <= %q", params.CreatedBefore))
 	}
 
