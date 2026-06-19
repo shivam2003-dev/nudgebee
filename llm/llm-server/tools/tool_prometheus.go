@@ -47,7 +47,7 @@ const ToolMetricsLabelsList = "metrics_labels_list"
 const ToolQueryPrometheus = "prometheus_execute"
 const ToolSearchMetrics = "search_metrics"
 
-// maxPrometheusMetricsInResponse caps the number of metrics returned by search_metrics.
+// maxPrometheusMetricsInResponse caps the number of metrics returned by metrics_list when LLM filtering is active.
 const maxPrometheusMetricsInResponse = 100
 
 func init() {
