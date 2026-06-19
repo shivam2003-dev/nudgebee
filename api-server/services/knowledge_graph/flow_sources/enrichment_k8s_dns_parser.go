@@ -82,7 +82,7 @@ func (p *K8sDNSParser) LooksLikeK8sServiceName(name string) bool {
 	// Skip if it's clearly an external hostname
 	externalTLDs := []string{".com", ".io", ".org", ".net", ".edu", ".gov", ".co", ".app"}
 	for _, tld := range externalTLDs {
-		if strings.Contains(name, tld) {
+		if strings.HasSuffix(strings.ToLower(name), tld) {
 			return false
 		}
 	}
