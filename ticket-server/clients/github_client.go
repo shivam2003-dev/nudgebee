@@ -19,6 +19,13 @@ import (
 // githubHTTPTimeout is the timeout for ad-hoc GitHub App HTTP requests.
 const githubHTTPTimeout = 30 * time.Second
 
+// githubHTTPClient is a package-level client reused across GitHub App requests
+// so connections (keep-alive) are pooled and we avoid per-call client overhead
+// and socket exhaustion.
+var githubHTTPClient = &http.Client{
+	Timeout: githubHTTPTimeout,
+}
+
 func CreateGithubClient(password string) *github.Client {
 	client := github.NewClient(nil).WithAuthToken(password)
 	return client
@@ -80,10 +87,7 @@ func GetGithubAppInstallationToken(ctx context.Context, installationID int64) (s
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 
-	client := &http.Client{
-		Timeout: githubHTTPTimeout,
-	}
-	resp, err := client.Do(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to make request to GitHub API: %w", err)
 	}
