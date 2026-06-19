@@ -449,7 +449,7 @@ func (e *TraceToKnowledgeGraphExtractor) isInternalDomain(hostname string) bool 
 		strings.HasPrefix(hostname, "127.") ||
 		strings.HasPrefix(hostname, "10.") ||
 		strings.HasPrefix(hostname, "192.168.") ||
-		strings.Contains(hostname, "172.") {
+		strings.HasPrefix(hostname, "172.") {
 		return true
 	}
 

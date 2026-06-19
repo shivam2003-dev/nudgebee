@@ -119,6 +119,11 @@ func TestIsInternalDomain(t *testing.T) {
 			description: "Internal IP range",
 		},
 		{
+			hostname:    "172.16.0.1",
+			expected:    true,
+			description: "Internal 172. IP range",
+		},
+		{
 			hostname:    "app.internal",
 			expected:    true,
 			description: "Internal domain suffix",
@@ -129,6 +134,11 @@ func TestIsInternalDomain(t *testing.T) {
 			hostname:    "api.external.com",
 			expected:    false,
 			description: "External domain",
+		},
+		{
+			hostname:    "app-172.prod.example.com",
+			expected:    false,
+			description: "Public domain containing 172. substring must not match private-IP check",
 		},
 		{
 			hostname:    "payment.stripe.com",
