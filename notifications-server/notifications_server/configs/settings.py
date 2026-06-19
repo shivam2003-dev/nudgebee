@@ -595,9 +595,7 @@ class NotificationSettings(BaseSettings):
     event_cache_ttl_seconds: int = Field(
         7200,
         gt=0,
-        validation_alias=AliasChoices(
-            "EVENT_CACHE_TTL_SECONDS", "CACHE_ENTRY_TTL_SECONDS", "event_cache_ttl_seconds"
-        ),
+        validation_alias=AliasChoices("EVENT_CACHE_TTL_SECONDS", "CACHE_ENTRY_TTL_SECONDS", "event_cache_ttl_seconds"),
     )
 
     model_config = SettingsConfigDict(env_prefix="")
