@@ -24,7 +24,7 @@ INSERT INTO workflow_templates (
         "id": "list_candidates",
         "type": "cloud.k8s.cli",
         "params": {
-          "command": "kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Failed -o wide; kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Succeeded -o wide",
+          "command": "kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Failed -o wide && kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Succeeded -o wide",
           "account_id": "{{ Inputs.account_id }}"
         }
       },
@@ -52,16 +52,16 @@ INSERT INTO workflow_templates (
           "command": "kubectl delete pods -n {{ Inputs.namespace }} --field-selector status.phase=Succeeded",
           "account_id": "{{ Inputs.account_id }}"
         },
-        "depends_on": ["delete_failed"]
+        "depends_on": ["approve"]
       },
       {
         "id": "verify",
         "type": "cloud.k8s.cli",
         "params": {
-          "command": "echo ''Remaining Failed pods:''; kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Failed -o wide || true; echo ''Remaining Succeeded pods:''; kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Succeeded -o wide || true",
+          "command": "if kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Failed -o name | grep -q . ; then echo ''Failed pods still present'' && exit 1; fi; if kubectl get pods -n {{ Inputs.namespace }} --field-selector status.phase=Succeeded -o name | grep -q . ; then echo ''Succeeded pods still present'' && exit 1; fi; echo ''All Failed/Succeeded pods cleaned up''",
           "account_id": "{{ Inputs.account_id }}"
         },
-        "depends_on": ["delete_succeeded"]
+        "depends_on": ["delete_failed", "delete_succeeded"]
       }
     ],
     "timeout": "10m"
