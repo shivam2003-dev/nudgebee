@@ -130,7 +130,7 @@ func (m GrafanaWebhook) ProcessEventWebook(sc *security.RequestContext, settings
 			continue
 		}
 
-		results = append(results, parsedPayload)
+		results = append(results, *parsedPayload)
 	}
 
 	if len(results) == 0 {
@@ -146,7 +146,7 @@ func (m GrafanaWebhook) ProcessEventWebook(sc *security.RequestContext, settings
 // severity, title) so that both the inbound webhook path and any reconcile
 // job that pulls alerts from Grafana's API produce identical, fingerprint-keyed
 // events.
-func mapGrafanaAlertToEvent(accountId string, alert map[string]any) (core.EventIncomingWebhook, error) {
+func mapGrafanaAlertToEvent(accountId string, alert map[string]any) (*core.EventIncomingWebhook, error) {
 	labels := mapStringAnyToStringString(alert["labels"])
 	annotations := mapStringAnyToStringString(alert["annotations"])
 
@@ -168,14 +168,26 @@ func mapGrafanaAlertToEvent(accountId string, alert map[string]any) (core.EventI
 		slog.Warn("grafana webhook: failed to parse 'endsAt'", "value", endsAtStr, "error", err)
 	}
 
+	// EventId is a required field on EventIncomingWebhook and is keyed on the
+	// fingerprint, so a missing or empty fingerprint is a hard error.
 	fingerprint, ok := alert["fingerprint"].(string)
-	if !ok {
-		slog.Warn("grafana webhook: missing or invalid 'fingerprint' field")
+	if !ok || fingerprint == "" {
+		return nil, fmt.Errorf("grafana webhook: missing or invalid 'fingerprint' field")
 	}
-	generatorURL, _ := alert["generatorURL"].(string)
-	dashboardURL, _ := alert["dashboardURL"].(string)
-	silenceURL, _ := alert["silenceURL"].(string)
-	panelURL, _ := alert["panelURL"].(string)
+
+	var generatorURL, dashboardURL, silenceURL, panelURL string
+	if val, ok := alert["generatorURL"].(string); ok {
+		generatorURL = val
+	}
+	if val, ok := alert["dashboardURL"].(string); ok {
+		dashboardURL = val
+	}
+	if val, ok := alert["silenceURL"].(string); ok {
+		silenceURL = val
+	}
+	if val, ok := alert["panelURL"].(string); ok {
+		panelURL = val
+	}
 	if silenceURL != "" {
 		labels["silenceURL"] = silenceURL
 	}
@@ -225,7 +237,7 @@ func mapGrafanaAlertToEvent(accountId string, alert map[string]any) (core.EventI
 		labels["service"] = subjectName
 	}
 
-	return core.EventIncomingWebhook{
+	return &core.EventIncomingWebhook{
 		AccountId:             accountId,
 		WebhookId:             uuid.NewString(),
 		EventType:             labels["alertname"],

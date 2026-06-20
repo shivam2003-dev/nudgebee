@@ -90,3 +90,17 @@ func TestMapGrafanaAlertToEvent_DashboardURLFallback(t *testing.T) {
 	assert.Equal(t, "https://grafana.example/dashboard", got.EventUrl)
 	assert.Equal(t, "https://grafana.example/dashboard", got.Investigation.SourceUrl)
 }
+
+func TestMapGrafanaAlertToEvent_MissingFingerprintErrors(t *testing.T) {
+	alert := map[string]any{
+		"status": "firing",
+		"labels": map[string]any{
+			"alertname": "NoFingerprint",
+		},
+		"annotations": map[string]any{},
+	}
+
+	got, err := mapGrafanaAlertToEvent("acct-4", alert)
+	require.Error(t, err)
+	assert.Nil(t, got)
+}
