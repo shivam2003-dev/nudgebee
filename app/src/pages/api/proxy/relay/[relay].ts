@@ -11,6 +11,11 @@ import { context, propagation, trace, SpanStatusCode } from '@opentelemetry/api'
 const relayEndpoint = process.env.RELAY_SERVER_ENDPOINT ?? 'http://localhost:52832';
 const secretKey = process.env.RELAY_SERVER_SECRET_KEY ?? '';
 
+// Allowlist of known relay-server endpoints reachable through this single-segment
+// proxy. The dynamic `[relay]` segment is interpolated into the upstream fetch URL,
+// so it must be validated against this set to prevent forwarding to arbitrary paths.
+const ALLOWED_RELAY_ENDPOINTS = new Set(['request', 'grafana', 'ws']);
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const tracer = trace.getTracer('relay-api');
   const { relay } = req.query;
@@ -97,7 +102,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return;
       }
 
-      // --- Step 3: Relay request ---
+      // --- Step 3: Validate relay endpoint against allowlist ---
+      const relaySegment = Array.isArray(relay) ? relay[0] : relay;
+      if (!relaySegment || !ALLOWED_RELAY_ENDPOINTS.has(relaySegment)) {
+        span.setStatus({ code: SpanStatusCode.ERROR, message: 'Invalid relay endpoint' });
+        res.status(400).json({ error: 'invalid_relay_endpoint', description: 'Unknown relay endpoint' });
+        return;
+      }
+
+      // --- Step 4: Relay request ---
       const relaySpan = tracer.startSpan('relayFetch', undefined, trace.setSpan(context.active(), span));
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -115,7 +128,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         let attempt = 3;
         while (attempt > 0 && !success) {
-          const response = await fetch(`${relayEndpoint}/${relay}`, {
+          const response = await fetch(`${relayEndpoint}/${relaySegment}`, {
             headers,
             body: JSON.stringify(req.body),
             method: 'post',
@@ -157,7 +170,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         relaySpan.end();
       }
 
-      // --- Step 4: Post-processing (Audit / History) ---
+      // --- Step 5: Post-processing (Audit / History) ---
       const diff = new Date().getTime() - startDate.getTime();
       const postSpan = tracer.startSpan('postProcessing', undefined, trace.setSpan(context.active(), span));
       try {
