@@ -1867,17 +1867,23 @@ const ServiceMapContent = () => {
     setPinnedNodeId(null);
   }, [clearPinHighlight]);
 
-  const accountOptions = useMemo(
-    () =>
+  const accountOptions = useMemo(() => {
+    const providerGroup = (provider) => {
+      if (!provider) return undefined;
+      const labels = { aws: 'AWS', gcp: 'GCP', azure: 'Azure', oci: 'OCI', k8s: 'Kubernetes' };
+      const key = provider.toLowerCase();
+      return labels[key] || provider;
+    };
+    return (
       accounts
         ?.filter((ac) => kgFilterOptions?.accountIds?.includes(ac.id))
         ?.map((acc) => ({
           label: acc.label || acc.account_name,
           value: acc.id || acc.value,
-          group: acc.cloud_provider,
-        })) || accounts,
-    [accounts, kgFilterOptions?.accountIds]
-  );
+          group: providerGroup(acc.cloud_provider),
+        })) || []
+    );
+  }, [accounts, kgFilterOptions?.accountIds]);
 
   return (
     <>
