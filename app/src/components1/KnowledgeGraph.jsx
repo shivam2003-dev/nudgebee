@@ -1874,6 +1874,7 @@ const ServiceMapContent = () => {
         ?.map((acc) => ({
           label: acc.label || acc.account_name,
           value: acc.id || acc.value,
+          group: acc.cloud_provider,
         })) || accounts,
     [accounts, kgFilterOptions?.accountIds]
   );
@@ -1971,6 +1972,7 @@ const ServiceMapContent = () => {
               value={draftAccountIds}
               onSelect={(e) => setDraftAccountIds(e.target.value)}
               multiple
+              grouped
               width='100%'
             />
             <FilterDropdown
