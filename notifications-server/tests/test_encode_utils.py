@@ -1,7 +1,11 @@
+import enum
 import json
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from notifications_server.utils.encode_utils import (
     MAX_PORT,
@@ -24,8 +28,6 @@ class TestModelEncoder:
         assert _encode({"at": dt}) == {"at": dt.isoformat()}
 
     def test_enum_serialized_as_value(self):
-        import enum
-
         class Color(enum.Enum):
             RED = "red"
 
@@ -63,12 +65,8 @@ class TestModelEncoder:
         class Opaque:
             pass
 
-        try:
+        with pytest.raises(TypeError):
             json.dumps({"x": Opaque()}, cls=ModelEncoder)
-        except TypeError:
-            pass
-        else:
-            raise AssertionError("expected TypeError for an unserializable object")
 
 
 def test_gen_id_returns_unique_uuid_strings():
@@ -101,8 +99,6 @@ class TestSingleton:
 def test_as_dict_maps_column_attrs():
     # Mimic the SQLAlchemy inspect(obj).mapper.column_attrs shape that as_dict
     # walks, without standing up a real mapped model.
-    from unittest.mock import MagicMock, patch
-
     class Row:
         id = 7
         name = "alpha"
