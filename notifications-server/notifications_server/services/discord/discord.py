@@ -54,10 +54,10 @@ class DiscordService:
             )
             self.session.add(installation)
             self.session.commit()
-            self.session.close()
             return installation
         except IntegrityError as exc:
             LOG.exception("Unable to save discord installation: %s", exc)
             self.session.rollback()
-            self.session.close()
             raise WrongArgumentsException(Err.OS0009, [exc])
+        finally:
+            self.session.close()
