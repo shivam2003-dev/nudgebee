@@ -857,28 +857,37 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
   // Each category is tagged with the optimization sources it applies to.
   // K8s-prefixed categories (and Pod Right Sizing) are Kubernetes-only and must not
   // show up when the selected source is a cloud account; the rest apply to both.
-  const OPTIMIZATION_CATEGORY_OPTIONS = [
-    { label: 'Pod Right Sizing', value: 'PodRightSizing', sources: ['k8s'] },
-    { label: 'Right Sizing', value: 'RightSizing', sources: ['k8s', 'cloud'] },
-    { label: 'K8s Instance Recommendation', value: 'K8sInstanceRecommendation', sources: ['k8s'] },
-    { label: 'K8s Spot Recommendation', value: 'K8sSpotRecommendation', sources: ['k8s'] },
-    { label: 'Configuration', value: 'Configuration', sources: ['k8s', 'cloud'] },
-    { label: 'Security', value: 'Security', sources: ['k8s', 'cloud'] },
-    { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute', sources: ['k8s'] },
-  ];
+  const OPTIMIZATION_CATEGORY_OPTIONS = useMemo(
+    () => [
+      { label: 'Pod Right Sizing', value: 'PodRightSizing', sources: ['k8s'] },
+      { label: 'Right Sizing', value: 'RightSizing', sources: ['k8s', 'cloud'] },
+      { label: 'K8s Instance Recommendation', value: 'K8sInstanceRecommendation', sources: ['k8s'] },
+      { label: 'K8s Spot Recommendation', value: 'K8sSpotRecommendation', sources: ['k8s'] },
+      { label: 'Configuration', value: 'Configuration', sources: ['k8s', 'cloud'] },
+      { label: 'Security', value: 'Security', sources: ['k8s', 'cloud'] },
+      { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute', sources: ['k8s'] },
+    ],
+    [],
+  );
 
-  // Determine the optimization source from the selected cluster/account. K8s clusters
+  // Determine the optimization source from a cluster/account value. K8s clusters
   // report cloud_provider === 'K8s'; cloud accounts report a provider like AWS/GCP/Azure.
-  // When nothing is selected we don't filter (show every category).
-  const selectedOptimizationSource = (() => {
-    const selectedCluster = optimizationClusters[0];
-    if (!selectedCluster) return null;
-    const match = k8sClusterOptions.find((c) => c.value === selectedCluster);
+  // Returns null when nothing is selected or the provider is unknown.
+  const getOptimizationSource = (clusterValue: string | undefined): 'k8s' | 'cloud' | null => {
+    if (!clusterValue) return null;
+    const match = k8sClusterOptions.find((c) => c.value === clusterValue);
     if (!match?.cloud_provider) return null;
     return match.cloud_provider.toUpperCase() === 'K8S' ? 'k8s' : 'cloud';
-  })();
+  };
 
-  const filteredOptimizationCategoryOptions = (() => {
+  // When nothing is selected we don't filter (show every category).
+  const selectedOptimizationSource = useMemo(
+    () => getOptimizationSource(optimizationClusters[0]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [optimizationClusters, k8sClusterOptions],
+  );
+
+  const filteredOptimizationCategoryOptions = useMemo(() => {
     const base = selectedOptimizationSource
       ? OPTIMIZATION_CATEGORY_OPTIONS.filter((opt) => opt.sources.includes(selectedOptimizationSource))
       : OPTIMIZATION_CATEGORY_OPTIONS;
@@ -890,7 +899,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
       return savedOpt ? [...base, savedOpt] : base;
     }
     return base;
-  })();
+  }, [selectedOptimizationSource, OPTIMIZATION_CATEGORY_OPTIONS, optimizationCategories]);
 
   const OPTIMIZATION_RULE_NAME_OPTIONS = [
     { label: 'Vertical Rightsize', value: 'vertical_rightsize' },
@@ -945,8 +954,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
           // If the new source no longer supports the selected category, clear it so the
           // trigger isn't left with a category that can never match (e.g. a K8s-only
           // category on a cloud account).
-          const match = value ? k8sClusterOptions.find((c) => c.value === value) : undefined;
-          const newSource = match?.cloud_provider ? (match.cloud_provider.toUpperCase() === 'K8S' ? 'k8s' : 'cloud') : null;
+          const newSource = getOptimizationSource(value);
           const selectedCategory = optimizationCategories[0];
           let categoriesUpdate: string[] | undefined;
           if (newSource && selectedCategory) {
