@@ -335,7 +335,6 @@ def _stitch_kb_extension_body(record):
     return "\n\n".join(parts)
 
 
-
 def fetch_servicenow_kb_extension_content(snow_client, sys_class_name, sys_id, kb_number=""):
     """Fetch template-specific body fields from a KB article's extension table.
 
@@ -411,7 +410,6 @@ def _bulk_fetch_servicenow_kb_extension_content(snow_client, lookups, chunk_size
                 )
                 continue
     return result
-
 
 
 def fetch_servicenow_kb_articles(snow_client, batch_size=50):
