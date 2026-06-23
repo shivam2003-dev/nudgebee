@@ -308,6 +308,33 @@ def get_kb_article_url(base_url, kb_number):
 # (``kb_category``, ``kb_knowledge_base``) we shouldn't embed.
 _KB_EXTENSION_SKIP_COLUMNS = frozenset({"kb_category", "kb_knowledge_base"})
 
+# Max number of sys_ids per ``sys_idIN<csv>`` bulk extension query. ServiceNow
+# has a practical URL-length limit on encoded queries, so we chunk to stay well
+# under it (sys_ids are 32 chars each).
+_KB_EXTENSION_BULK_CHUNK_SIZE = 50
+
+
+def _stitch_kb_extension_body(record):
+    """Build a plain-text body from an extension-table row's ``kb_`` columns.
+
+    OOB ServiceNow KB templates prefix their body columns with ``kb_`` (e.g.
+    ``kb_cause``, ``kb_workaround``, ``kb_question``, ``kb_answer``). Everything
+    else on the row is editor/instrumentation noise, so we whitelist the
+    ``kb_`` prefix. Reference fields come back as dicts and are skipped; only
+    non-empty string columns contribute. Uses plain-text ``##`` section headers
+    (not ``<h3>``) so an unexpected field_name can't synthesize HTML that
+    bypasses the script/style stripper in ``extract_kb_content``.
+    """
+    parts = []
+    for field_name, value in record.items():
+        if not field_name.startswith("kb_") or field_name in _KB_EXTENSION_SKIP_COLUMNS:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            continue
+        parts.append(f"## {field_name}\n\n{value}")
+    return "\n\n".join(parts)
+
+
 
 def fetch_servicenow_kb_extension_content(snow_client, sys_class_name, sys_id, kb_number=""):
     """Fetch template-specific body fields from a KB article's extension table.
@@ -336,25 +363,55 @@ def fetch_servicenow_kb_extension_content(snow_client, sys_class_name, sys_id, k
         record = resource.get(query={"sys_id": sys_id}).one_or_none()
         if not record:
             return ""
-        parts = []
-        for field_name, value in record.items():
-            if not field_name.startswith("kb_") or field_name in _KB_EXTENSION_SKIP_COLUMNS:
-                continue
-            # Reference fields come back as dicts ({"link": ..., "value": ...});
-            # only long-text/string content columns matter for the body.
-            if not isinstance(value, str) or not value.strip():
-                continue
-            # Use a plain-text section header (not <h3>) so an unexpected
-            # field_name can't synthesize HTML that bypasses the script/style
-            # stripper in extract_kb_content.
-            parts.append(f"## {field_name}\n\n{value}")
-        return "\n\n".join(parts)
+        return _stitch_kb_extension_body(record)
     except Exception as e:
         logger.warning(
             f"Extension-table fallback failed for {kb_number} "
             f"(sys_class_name={sys_class_name}, sys_id={sys_id}): {e}"
         )
         return ""
+
+
+def _bulk_fetch_servicenow_kb_extension_content(snow_client, lookups, chunk_size=_KB_EXTENSION_BULK_CHUNK_SIZE):
+    """Bulk-fetch extension-table body content for empty-body KB articles.
+
+    ``lookups`` maps ``sys_class_name`` -> list of ``sys_id``. For each template
+    we issue one ``sys_idIN<csv>`` query per ``chunk_size`` sys_ids instead of
+    one GET per article, dropping extension-table calls from O(empty articles)
+    to O(distinct templates). Returns ``{sys_id: stitched_body}``.
+
+    On a bulk-query failure for a chunk we simply leave those sys_ids out of the
+    map, so the caller transparently falls back to the per-article fetch for
+    them (a misbehaving custom extension table can't fail the whole sync).
+    """
+    result: dict = {}
+    if not snow_client or not lookups:
+        return result
+    for sys_class_name, sys_ids in lookups.items():
+        if not sys_class_name or sys_class_name == "kb_knowledge":
+            continue
+        # `sys_class_name` is interpolated into the API path — reject anything
+        # that isn't a ServiceNow table-name shape (defense-in-depth).
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", sys_class_name):
+            logger.warning(f"Skipping bulk extension fetch: unexpected sys_class_name={sys_class_name!r}")
+            continue
+        for i in range(0, len(sys_ids), chunk_size):
+            chunk = sys_ids[i : i + chunk_size]
+            try:
+                resource = snow_client.resource(api_path=f"/table/{sys_class_name}")
+                records = resource.get(query=f"sys_idIN{','.join(chunk)}").all()
+                for record in records:
+                    sid = record.get("sys_id")
+                    if isinstance(sid, str) and sid:
+                        result[sid] = _stitch_kb_extension_body(record)
+            except Exception as e:
+                logger.warning(
+                    f"Bulk extension fetch failed for {sys_class_name} ({len(chunk)} ids): {e}; "
+                    "falling back to per-article fetch for these articles"
+                )
+                continue
+    return result
+
 
 
 def fetch_servicenow_kb_articles(snow_client, batch_size=50):
@@ -386,8 +443,16 @@ def fetch_servicenow_kb_articles(snow_client, batch_size=50):
         return []
 
 
-def process_servicenow_kb_article(article, base_url, snow_client=None):
-    """Process a single ServiceNow KB article into a Document."""
+def process_servicenow_kb_article(article, base_url, snow_client=None, extension_content_by_sys_id=None):
+    """Process a single ServiceNow KB article into a Document.
+
+    ``extension_content_by_sys_id`` is an optional ``{sys_id: stitched_body}``
+    map pre-fetched in bulk by the caller. When the article's primary body is
+    empty and its sys_id is present in the map, the pre-fetched content is used
+    instead of issuing a per-article extension-table call. If the map is absent
+    or doesn't contain the sys_id (e.g. the bulk query failed for its template),
+    we fall back to the per-article fetch.
+    """
     try:
         sys_id = article.get("sys_id", "")
         kb_number = article.get("number", "")
@@ -415,7 +480,10 @@ def process_servicenow_kb_article(article, base_url, snow_client=None):
         # *extracted* content is empty, not just when html_text is empty — SNOW
         # often returns boilerplate like `<p><br></p>` that strips to nothing.
         if not text_content and snow_client is not None:
-            html_text = fetch_servicenow_kb_extension_content(snow_client, sys_class_name, sys_id, kb_number)
+            if extension_content_by_sys_id is not None and sys_id in extension_content_by_sys_id:
+                html_text = extension_content_by_sys_id[sys_id]
+            else:
+                html_text = fetch_servicenow_kb_extension_content(snow_client, sys_class_name, sys_id, kb_number)
             if html_text:
                 body_field = sys_class_name
                 text_content = extract_kb_content(html_text)
@@ -461,9 +529,28 @@ def collect_servicenow_kb_documents(snow_client, base_url):
     the load history records one row per sync, not one per article batch.
     """
     articles = fetch_servicenow_kb_articles(snow_client)
+
+    # Pre-pass: find articles whose primary body (text/wiki) extracts to nothing
+    # — these need their body recovered from an extension table. Group their
+    # sys_ids by sys_class_name so the extension content can be bulk-fetched
+    # (one query per template) instead of one GET per empty-body article.
+    extension_lookups: dict = {}
+    for article in articles:
+        sys_class_name = article.get("sys_class_name", "")
+        sys_id = article.get("sys_id", "")
+        if not sys_id or not sys_class_name or sys_class_name == "kb_knowledge":
+            continue
+        text_body = article.get("text") or ""
+        wiki_body = article.get("wiki") or ""
+        primary_body = text_body if len(text_body) >= len(wiki_body) else wiki_body
+        if not extract_kb_content(primary_body):
+            extension_lookups.setdefault(sys_class_name, []).append(sys_id)
+
+    extension_content_by_sys_id = _bulk_fetch_servicenow_kb_extension_content(snow_client, extension_lookups)
+
     documents: List[Document] = []
     for article in articles:
-        doc = process_servicenow_kb_article(article, base_url, snow_client)
+        doc = process_servicenow_kb_article(article, base_url, snow_client, extension_content_by_sys_id)
         if doc:
             documents.append(doc)
     logger.info(f"Collected {len(documents)} ServiceNow KB documents from {len(articles)} articles")
