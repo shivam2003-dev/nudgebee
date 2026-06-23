@@ -242,7 +242,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
   const [optimizationCategories, setOptimizationCategories] = useState<string[]>([]);
   const [optimizationRuleNames, setOptimizationRuleNames] = useState<string[]>([]);
   const [optimizationClusters, setOptimizationClusters] = useState<string[]>([]);
-  const [k8sClusterOptions, setK8sClusterOptions] = useState<{ label: string; value: string }[]>([]);
+  const [k8sClusterOptions, setK8sClusterOptions] = useState<{ label: string; value: string; cloud_provider?: string }[]>([]);
   const [isLoadingK8sClusters, setIsLoadingK8sClusters] = useState(false);
 
   // Buffered trigger-config state. Edits go into `pendingTriggerConfig` instead
@@ -854,15 +854,43 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
     }
   };
 
+  // Each category is tagged with the optimization sources it applies to.
+  // K8s-prefixed categories (and Pod Right Sizing) are Kubernetes-only and must not
+  // show up when the selected source is a cloud account; the rest apply to both.
   const OPTIMIZATION_CATEGORY_OPTIONS = [
-    { label: 'Pod Right Sizing', value: 'PodRightSizing' },
-    { label: 'Right Sizing', value: 'RightSizing' },
-    { label: 'K8s Instance Recommendation', value: 'K8sInstanceRecommendation' },
-    { label: 'K8s Spot Recommendation', value: 'K8sSpotRecommendation' },
-    { label: 'Configuration', value: 'Configuration' },
-    { label: 'Security', value: 'Security' },
-    { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute' },
+    { label: 'Pod Right Sizing', value: 'PodRightSizing', sources: ['k8s'] },
+    { label: 'Right Sizing', value: 'RightSizing', sources: ['k8s', 'cloud'] },
+    { label: 'K8s Instance Recommendation', value: 'K8sInstanceRecommendation', sources: ['k8s'] },
+    { label: 'K8s Spot Recommendation', value: 'K8sSpotRecommendation', sources: ['k8s'] },
+    { label: 'Configuration', value: 'Configuration', sources: ['k8s', 'cloud'] },
+    { label: 'Security', value: 'Security', sources: ['k8s', 'cloud'] },
+    { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute', sources: ['k8s'] },
   ];
+
+  // Determine the optimization source from the selected cluster/account. K8s clusters
+  // report cloud_provider === 'K8s'; cloud accounts report a provider like AWS/GCP/Azure.
+  // When nothing is selected we don't filter (show every category).
+  const selectedOptimizationSource = (() => {
+    const selectedCluster = optimizationClusters[0];
+    if (!selectedCluster) return null;
+    const match = k8sClusterOptions.find((c) => c.value === selectedCluster);
+    if (!match?.cloud_provider) return null;
+    return match.cloud_provider.toUpperCase() === 'K8S' ? 'k8s' : 'cloud';
+  })();
+
+  const filteredOptimizationCategoryOptions = (() => {
+    const base = selectedOptimizationSource
+      ? OPTIMIZATION_CATEGORY_OPTIONS.filter((opt) => opt.sources.includes(selectedOptimizationSource))
+      : OPTIMIZATION_CATEGORY_OPTIONS;
+    // Preserve an already-saved category even if it's no longer in the filtered set,
+    // so editing an existing trigger never silently drops the selection.
+    const saved = optimizationCategories[0];
+    if (saved && !base.some((opt) => opt.value === saved)) {
+      const savedOpt = OPTIMIZATION_CATEGORY_OPTIONS.find((opt) => opt.value === saved);
+      return savedOpt ? [...base, savedOpt] : base;
+    }
+    return base;
+  })();
 
   const OPTIMIZATION_RULE_NAME_OPTIONS = [
     { label: 'Vertical Rightsize', value: 'vertical_rightsize' },
@@ -913,7 +941,23 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
           const value = e.target.value || '';
           const newClusters = value ? [value] : [];
           setOptimizationClusters(newClusters);
-          updateOptimizationTrigger({ clusters: newClusters });
+
+          // If the new source no longer supports the selected category, clear it so the
+          // trigger isn't left with a category that can never match (e.g. a K8s-only
+          // category on a cloud account).
+          const match = value ? k8sClusterOptions.find((c) => c.value === value) : undefined;
+          const newSource = match?.cloud_provider ? (match.cloud_provider.toUpperCase() === 'K8S' ? 'k8s' : 'cloud') : null;
+          const selectedCategory = optimizationCategories[0];
+          let categoriesUpdate: string[] | undefined;
+          if (newSource && selectedCategory) {
+            const opt = OPTIMIZATION_CATEGORY_OPTIONS.find((o) => o.value === selectedCategory);
+            if (opt && !opt.sources.includes(newSource)) {
+              categoriesUpdate = [];
+              setOptimizationCategories([]);
+            }
+          }
+
+          updateOptimizationTrigger(categoriesUpdate ? { clusters: newClusters, categories: categoriesUpdate } : { clusters: newClusters });
         }}
         placeholder='Select cluster'
         required={false}
@@ -945,7 +989,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
         required={false}
         error=''
         fieldType='dropdown'
-        options={OPTIMIZATION_CATEGORY_OPTIONS}
+        options={filteredOptimizationCategoryOptions}
         onSelect={() => {}}
         customRender={null}
         limitTags={0}
