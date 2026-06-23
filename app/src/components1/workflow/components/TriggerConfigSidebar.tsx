@@ -867,7 +867,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
       { label: 'Security', value: 'Security', sources: ['k8s', 'cloud'] },
       { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute', sources: ['k8s'] },
     ],
-    [],
+    []
   );
 
   // Determine the optimization source from a cluster/account value. K8s clusters
@@ -884,7 +884,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
   const selectedOptimizationSource = useMemo(
     () => getOptimizationSource(optimizationClusters[0]),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [optimizationClusters, k8sClusterOptions],
+    [optimizationClusters, k8sClusterOptions]
   );
 
   const filteredOptimizationCategoryOptions = useMemo(() => {
