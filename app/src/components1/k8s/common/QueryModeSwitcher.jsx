@@ -543,17 +543,10 @@ const QueryModeSwitcher = ({
         return;
       }
 
-      if (typeof queryData.promql === 'string') {
-        generatedQuery = queryData.promql.trim();
-        llmResponse = generatedQuery;
-      } else if (typeof queryData.logql === 'string') {
-        generatedQuery = queryData.logql.trim();
-        llmResponse = generatedQuery;
-      } else if (typeof queryData.logql_query === 'string') {
-        generatedQuery = queryData.logql_query.trim();
-        llmResponse = generatedQuery;
-      } else if (typeof queryData.query === 'string') {
-        generatedQuery = queryData.query.trim();
+      const queryKeys = ['promql', 'logql', 'logql_query', 'query'];
+      const foundKey = queryKeys.find((key) => typeof queryData[key] === 'string');
+      if (foundKey) {
+        generatedQuery = queryData[foundKey].trim();
         llmResponse = generatedQuery;
       } else {
         const queries = Object.keys(queryData);
