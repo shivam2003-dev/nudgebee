@@ -29,6 +29,15 @@ describe('optimization trigger category options', () => {
     ]);
   });
 
+  it('detects Kubernetes sources with lowercase provider metadata', () => {
+    const sourceType = getOptimizationSourceType('k8s-lowercase', [
+      ...sourceOptions,
+      { label: 'Kubernetes lowercase', value: 'k8s-lowercase', cloud_provider: 'k8s' },
+    ]);
+
+    expect(sourceType).toBe('k8s');
+  });
+
   it('preserves a saved category that is outside the selected source filter', () => {
     const sourceType = getOptimizationSourceType('aws-account', sourceOptions);
     const values = getOptimizationCategoryOptions(sourceType, ['K8sSpotRecommendation']).map((option) => option.value);

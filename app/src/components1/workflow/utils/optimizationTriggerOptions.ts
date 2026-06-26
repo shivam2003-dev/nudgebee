@@ -46,7 +46,7 @@ export const getOptimizationSourceType = (sourceId: string, sourceOptions: Workf
     return 'all';
   }
 
-  if (selectedSource.cloud_provider === 'K8s' || selectedSource.account_type?.toLowerCase() === 'kubernetes') {
+  if (selectedSource.cloud_provider?.toLowerCase() === 'k8s' || selectedSource.account_type?.toLowerCase() === 'kubernetes') {
     return 'k8s';
   }
 
