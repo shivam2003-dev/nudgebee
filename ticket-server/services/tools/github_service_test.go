@@ -242,3 +242,204 @@ func TestGetGithubIssueWithClient_MapsMetadata(t *testing.T) {
 		t.Errorf("Platform = %q, want github", got.Platform)
 	}
 }
+
+func TestUpdateGitHubIssueWithClient_ClosedUsesIssueState(t *testing.T) {
+	const owner, repo = "nudgebee", "demo"
+	var sentState string
+	var graphQLCalled bool
+
+	handler := http.NewServeMux()
+	handler.HandleFunc("/repos/"+owner+"/"+repo+"/issues/42", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Fatalf("method = %s, want PATCH", r.Method)
+		}
+		var body struct {
+			State string `json:"state"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode update body: %v", err)
+		}
+		sentState = body.State
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"number":42,"state":"closed"}`))
+	})
+
+	client, srv := newTestGithubClient(t, handler)
+	defer srv.Close()
+
+	graphQLSrv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		graphQLCalled = true
+	}))
+	defer graphQLSrv.Close()
+	oldEndpoint := githubGraphQLEndpoint
+	oldHTTPClient := githubGraphQLHTTPClient
+	githubGraphQLEndpoint = graphQLSrv.URL
+	githubGraphQLHTTPClient = graphQLSrv.Client()
+	defer func() {
+		githubGraphQLEndpoint = oldEndpoint
+		githubGraphQLHTTPClient = oldHTTPClient
+	}()
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	err := updateGitHubIssueWithClient(ctx, client, "token", owner, repo, "42", models.UpdateFields{Status: "closed"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sentState != "closed" {
+		t.Fatalf("state = %q, want closed", sentState)
+	}
+	if graphQLCalled {
+		t.Fatal("GraphQL should not be called for issue-level open/closed transitions")
+	}
+}
+
+func TestUpdateGitHubIssueWithClient_ProjectStatusUsesGraphQL(t *testing.T) {
+	const owner, repo = "nudgebee", "demo"
+	var restEditCalled bool
+	var mutationOptionID string
+
+	restHandler := http.NewServeMux()
+	restHandler.HandleFunc("/repos/"+owner+"/"+repo+"/issues/42", func(http.ResponseWriter, *http.Request) {
+		restEditCalled = true
+	})
+	client, restSrv := newTestGithubClient(t, restHandler)
+	defer restSrv.Close()
+
+	graphQLSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode graphql body: %v", err)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer token" {
+			t.Fatalf("Authorization = %q, want Bearer token", auth)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(body.Query, "projectItems") {
+			_, _ = w.Write([]byte(`{
+				"data": {
+					"repository": {
+						"issue": {
+							"projectItems": {
+								"nodes": [{
+									"id": "item-1",
+									"project": {
+										"id": "project-1",
+										"title": "Delivery",
+										"fields": {
+											"nodes": [{
+												"id": "field-status",
+												"name": "Status",
+												"options": [
+													{"id": "opt-ready", "name": "Ready"},
+													{"id": "opt-qa", "name": "QA"}
+												]
+											}]
+										}
+									}
+								}]
+							}
+						}
+					}
+				}
+			}`))
+			return
+		}
+		if strings.Contains(body.Query, "updateProjectV2ItemFieldValue") {
+			mutationOptionID, _ = body.Variables["optionId"].(string)
+			if body.Variables["projectId"] != "project-1" || body.Variables["itemId"] != "item-1" || body.Variables["fieldId"] != "field-status" {
+				t.Fatalf("unexpected mutation variables: %#v", body.Variables)
+			}
+			_, _ = w.Write([]byte(`{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"item-1"}}}}`))
+			return
+		}
+		t.Fatalf("unexpected GraphQL query: %s", body.Query)
+	}))
+	defer graphQLSrv.Close()
+
+	oldEndpoint := githubGraphQLEndpoint
+	oldHTTPClient := githubGraphQLHTTPClient
+	githubGraphQLEndpoint = graphQLSrv.URL
+	githubGraphQLHTTPClient = graphQLSrv.Client()
+	defer func() {
+		githubGraphQLEndpoint = oldEndpoint
+		githubGraphQLHTTPClient = oldHTTPClient
+	}()
+
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	err := updateGitHubIssueWithClient(ctx, client, "token", owner, repo, "42", models.UpdateFields{Status: "Ready"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if restEditCalled {
+		t.Fatal("REST issue edit should not be called for project-only status transitions")
+	}
+	if mutationOptionID != "opt-ready" {
+		t.Fatalf("optionId = %q, want opt-ready", mutationOptionID)
+	}
+}
+
+func TestGitHubStatusAllowedValuesIncludesProjectStatuses(t *testing.T) {
+	graphQLSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode graphql body: %v", err)
+		}
+		if !strings.Contains(body.Query, "projectsV2") {
+			t.Fatalf("expected projectsV2 query, got %s", body.Query)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": {
+				"repository": {
+					"projectsV2": {
+						"nodes": [{
+							"id": "project-1",
+							"title": "Delivery",
+							"fields": {
+								"nodes": [{
+									"id": "field-status",
+									"name": "Status",
+									"options": [
+										{"id": "opt-ready", "name": "Ready"},
+										{"id": "opt-progress", "name": "In Progress"}
+									]
+								}]
+							}
+						}]
+					}
+				}
+			}
+		}`))
+	}))
+	defer graphQLSrv.Close()
+
+	oldEndpoint := githubGraphQLEndpoint
+	oldHTTPClient := githubGraphQLHTTPClient
+	githubGraphQLEndpoint = graphQLSrv.URL
+	githubGraphQLHTTPClient = graphQLSrv.Client()
+	defer func() {
+		githubGraphQLEndpoint = oldEndpoint
+		githubGraphQLHTTPClient = oldHTTPClient
+	}()
+
+	values := githubStatusAllowedValues(httptest.NewRequest(http.MethodPost, "/", nil).Context(), "token", "nudgebee", "demo")
+	got := map[string]bool{}
+	for _, value := range values {
+		row, ok := value.(map[string]interface{})
+		if !ok {
+			t.Fatalf("unexpected value type %T", value)
+		}
+		got[row["value"].(string)] = true
+	}
+
+	for _, want := range []string{"open", "closed", "Ready", "In Progress"} {
+		if !got[want] {
+			t.Fatalf("status %q missing from allowed values %#v", want, values)
+		}
+	}
+}
