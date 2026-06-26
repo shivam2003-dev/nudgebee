@@ -59,7 +59,9 @@ class Config:
     rag_collection_cache_ttl = int(
         os.environ.get("RAG_COLLECTION_CACHE_TTL", 1800)
     )  # Qdrant collection list cache (default 30 min)
-    reranking_max_docs = int(os.environ.get("RAG_RERANKING_MAX_DOCS", 10))  # max docs sent to LLM for reranking
+    reranking_min_docs = int(
+        os.environ.get("RAG_RERANKING_MIN_DOCS", os.environ.get("RAG_RERANKING_MAX_DOCS", 10))
+    )  # minimum docs sent to LLM for reranking; old env name kept as fallback
     search_max_workers = int(
         os.environ.get("RAG_SEARCH_MAX_WORKERS", 8)
     )  # thread pool size for parallel collection search

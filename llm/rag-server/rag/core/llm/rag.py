@@ -132,12 +132,16 @@ def get_matching_documents(
         similar_docs_flat.sort(key=lambda x: x[1], reverse=True)
 
         if use_reranking:
-            # Cap docs sent to LLM to reduce input tokens and latency.
-            # Only send the top candidates by similarity for reranking.
-            max_docs_for_reranking = max(no_of_results * 2, Config.reranking_max_docs)
-            docs_for_reranking = similar_docs_flat[:max_docs_for_reranking]
-            if len(similar_docs_flat) > max_docs_for_reranking:
-                logger.info(f"Capping docs for LLM reranking: {len(similar_docs_flat)} -> {max_docs_for_reranking}")
+            # Send 2x the requested results so the LLM has room to reorder,
+            # while keeping a minimum candidate pool for small requests.
+            docs_for_reranking_count = max(no_of_results * 2, Config.reranking_min_docs)
+            docs_for_reranking = similar_docs_flat[:docs_for_reranking_count]
+            if len(similar_docs_flat) > docs_for_reranking_count:
+                logger.info(
+                    "Limiting docs for LLM reranking pool: %s -> %s",
+                    len(similar_docs_flat),
+                    docs_for_reranking_count,
+                )
 
             llm = get_llm(account_id)
             docs_reranked, token_usage = rerank_with_llm(query, module, docs_for_reranking, llm)
