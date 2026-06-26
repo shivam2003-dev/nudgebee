@@ -70,25 +70,25 @@ help:
 install:
 	@for service in $(INSTALL_SERVICES); do \
 		echo "==> $$service: install"; \
-		$(MAKE) -C $$service install; \
+		$(MAKE) -C $$service install || exit 1; \
 	done
 
 fmt:
 	@for service in $(FMT_SERVICES); do \
 		echo "==> $$service: fmt"; \
-		$(MAKE) -C $$service fmt; \
+		$(MAKE) -C $$service fmt || exit 1; \
 	done
 
 lint:
 	@for service in $(LINT_SERVICES); do \
 		echo "==> $$service: lint"; \
-		$(MAKE) -C $$service lint; \
+		$(MAKE) -C $$service lint || exit 1; \
 	done
 
 test:
 	@for service in $(TEST_SERVICES); do \
 		echo "==> $$service: test"; \
-		$(MAKE) -C $$service test; \
+		$(MAKE) -C $$service test || exit 1; \
 	done
 
 validate: lint test
@@ -96,5 +96,5 @@ validate: lint test
 clean:
 	@for service in $(CLEAN_SERVICES); do \
 		echo "==> $$service: clean"; \
-		$(MAKE) -C $$service clean; \
+		$(MAKE) -C $$service clean || exit 1; \
 	done

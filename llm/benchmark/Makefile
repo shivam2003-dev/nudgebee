@@ -3,9 +3,7 @@
 PYTHON ?= .venv/bin/python
 
 install:
-	uv venv --python 3.13 .venv
-	uv pip install --python $(PYTHON) -r uv.lock
-	uv pip install --python $(PYTHON) -e .
+	uv sync --python 3.13
 
 fmt:
 	$(PYTHON) -m black benchmark_server
