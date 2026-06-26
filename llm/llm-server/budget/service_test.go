@@ -2,6 +2,7 @@ package budget
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"nudgebee/llm/common"
@@ -71,22 +72,25 @@ func TestBudgetUsageFiltersPartitionEventAndUserInvestigation(t *testing.T) {
 	}()
 
 	dbManager := &common.DatabaseManager{Db: sqlx.NewDb(db, "postgres")}
+	eventSessionPattern := regexp.QuoteMeta(events.SessionIdPrefixEvent + "%")
+	notEventSessionPredicate := "c\\.session_id NOT LIKE '" + eventSessionPattern + "'"
+	eventSessionPredicate := "c\\.session_id LIKE '" + eventSessionPattern + "'"
 
-	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*c\\.session_id NOT LIKE 'event-%'.*").
+	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*" + notEventSessionPredicate + ".*").
 		WithArgs("account-1").
 		WillReturnRows(sqlmock.NewRows([]string{"total_cost"}).AddRow(2.5))
 	userCost, err := GetAccountTokenUsage(dbManager, "account-1", ModuleUserInvestigation)
 	require.NoError(t, err)
 	assert.Equal(t, 2.5, userCost)
 
-	mock.ExpectQuery("(?s).*FROM llm_conversations c.*c\\.session_id NOT LIKE 'event-%'.*").
+	mock.ExpectQuery("(?s).*FROM llm_conversations c.*" + notEventSessionPredicate + ".*").
 		WithArgs("account-1").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(7))
 	userCount, err := GetAccountConversationCount(dbManager, "account-1", ModuleUserInvestigation)
 	require.NoError(t, err)
 	assert.Equal(t, 7, userCount)
 
-	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*c\\.session_id LIKE 'event-%'.*").
+	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*" + eventSessionPredicate + ".*").
 		WithArgs("account-1").
 		WillReturnRows(sqlmock.NewRows([]string{"total_cost"}).AddRow(1.25))
 	eventCost, err := GetAccountTokenUsage(dbManager, "account-1", ModuleInvestigation)
