@@ -1,29 +1,30 @@
-import asyncio
-import json
-import logging
 import os
-import sys
-import re
-import signal
-import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import List, Optional, Union
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+os.environ["RAGAS_DO_NOT_TRACK"] = "true"
 
-from benchmark_server.middleware.auth import (
+import asyncio  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import re  # noqa: E402
+import signal  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import List, Optional, Union  # noqa: E402
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+
+from benchmark_server.middleware.auth import (  # noqa: E402
     AuthUser,
     get_authz,
     get_current_user,
 )
-from benchmark_server.utils import run_manager
-from benchmark_server.utils.db_utils import get_user_email
-from benchmark_server.utils.email_utils import send_email_async
-from benchmark_server.utils.email_templates import build_benchmark_email
-
-os.environ["RAGAS_DO_NOT_TRACK"] = "true"
+from benchmark_server.utils import run_manager  # noqa: E402
+from benchmark_server.utils.db_utils import get_user_email  # noqa: E402
+from benchmark_server.utils.email_utils import send_email_async  # noqa: E402
+from benchmark_server.utils.email_templates import build_benchmark_email  # noqa: E402
 
 router = APIRouter(prefix="/agent-benchmark", tags=["agent-benchmark"])
 logger = logging.getLogger(__name__)
