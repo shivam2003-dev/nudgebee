@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/v67/github"
+	"github.com/stretchr/testify/assert"
 )
 
 // newTestGithubClient wires a github.Client to a local httptest server so we
@@ -296,7 +298,7 @@ func TestUpdateGitHubIssueWithClient_ClosedUsesIssueState(t *testing.T) {
 func TestUpdateGitHubIssueWithClient_ProjectStatusUsesGraphQL(t *testing.T) {
 	const owner, repo = "nudgebee", "demo"
 	var restEditCalled bool
-	var mutationOptionID string
+	var mutationOptionIDs []string
 
 	restHandler := http.NewServeMux()
 	restHandler.HandleFunc("/repos/"+owner+"/"+repo+"/issues/42", func(http.ResponseWriter, *http.Request) {
@@ -339,6 +341,22 @@ func TestUpdateGitHubIssueWithClient_ProjectStatusUsesGraphQL(t *testing.T) {
 											}]
 										}
 									}
+								}, {
+									"id": "item-2",
+									"project": {
+										"id": "project-2",
+										"title": "Support",
+										"fields": {
+											"nodes": [{
+												"id": "field-status-2",
+												"name": "Status",
+												"options": [
+													{"id": "opt-ready-2", "name": "Ready"},
+													{"id": "opt-done-2", "name": "Done"}
+												]
+											}]
+										}
+									}
 								}]
 							}
 						}
@@ -348,8 +366,11 @@ func TestUpdateGitHubIssueWithClient_ProjectStatusUsesGraphQL(t *testing.T) {
 			return
 		}
 		if strings.Contains(body.Query, "updateProjectV2ItemFieldValue") {
-			mutationOptionID, _ = body.Variables["optionId"].(string)
-			if body.Variables["projectId"] != "project-1" || body.Variables["itemId"] != "item-1" || body.Variables["fieldId"] != "field-status" {
+			mutationOptionID, _ := body.Variables["optionId"].(string)
+			mutationOptionIDs = append(mutationOptionIDs, mutationOptionID)
+			validFirstProject := body.Variables["projectId"] == "project-1" && body.Variables["itemId"] == "item-1" && body.Variables["fieldId"] == "field-status"
+			validSecondProject := body.Variables["projectId"] == "project-2" && body.Variables["itemId"] == "item-2" && body.Variables["fieldId"] == "field-status-2"
+			if !validFirstProject && !validSecondProject {
 				t.Fatalf("unexpected mutation variables: %#v", body.Variables)
 			}
 			_, _ = w.Write([]byte(`{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"item-1"}}}}`))
@@ -376,8 +397,73 @@ func TestUpdateGitHubIssueWithClient_ProjectStatusUsesGraphQL(t *testing.T) {
 	if restEditCalled {
 		t.Fatal("REST issue edit should not be called for project-only status transitions")
 	}
-	if mutationOptionID != "opt-ready" {
-		t.Fatalf("optionId = %q, want opt-ready", mutationOptionID)
+	if !assert.ElementsMatch(t, []string{"opt-ready", "opt-ready-2"}, mutationOptionIDs) {
+		t.Fatalf("optionIds = %#v, want both linked Project Ready options", mutationOptionIDs)
+	}
+}
+
+func TestFetchGitHubIssueProjectStatusOptionsHandlesNullRepositoryAndIssue(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		wantErr string
+	}{
+		{
+			name:    "repository null",
+			body:    `{"data":{"repository":null}}`,
+			wantErr: "repository nudgebee/demo was not found",
+		},
+		{
+			name:    "issue null",
+			body:    `{"data":{"repository":{"issue":null}}}`,
+			wantErr: "issue 42 in nudgebee/demo was not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graphQLSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer graphQLSrv.Close()
+
+			oldEndpoint := githubGraphQLEndpoint
+			oldHTTPClient := githubGraphQLHTTPClient
+			githubGraphQLEndpoint = graphQLSrv.URL
+			githubGraphQLHTTPClient = graphQLSrv.Client()
+			defer func() {
+				githubGraphQLEndpoint = oldEndpoint
+				githubGraphQLHTTPClient = oldHTTPClient
+			}()
+
+			_, err := fetchGitHubIssueProjectStatusOptions(context.Background(), "token", "nudgebee", "demo", 42)
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFetchGitHubRepositoryProjectStatusOptionsHandlesNullRepository(t *testing.T) {
+	graphQLSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"repository":null}}`))
+	}))
+	defer graphQLSrv.Close()
+
+	oldEndpoint := githubGraphQLEndpoint
+	oldHTTPClient := githubGraphQLHTTPClient
+	githubGraphQLEndpoint = graphQLSrv.URL
+	githubGraphQLHTTPClient = graphQLSrv.Client()
+	defer func() {
+		githubGraphQLEndpoint = oldEndpoint
+		githubGraphQLHTTPClient = oldHTTPClient
+	}()
+
+	_, err := fetchGitHubRepositoryProjectStatusOptions(context.Background(), "token", "nudgebee", "demo")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "repository nudgebee/demo was not found")
 	}
 }
 

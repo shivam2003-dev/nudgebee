@@ -786,11 +786,22 @@ func updateGitHubProjectStatus(ctx context.Context, githubToken, owner, repo str
 	}
 
 	var available []string
+	var matching []githubProjectStatusOption
 	for _, option := range options {
 		available = append(available, option.OptionName)
 		if strings.EqualFold(option.OptionName, status) {
-			return setGitHubProjectStatus(ctx, githubToken, option)
+			matching = append(matching, option)
 		}
+	}
+
+	if len(matching) > 0 {
+		var updateErrs []error
+		for _, option := range matching {
+			if err := setGitHubProjectStatus(ctx, githubToken, option); err != nil {
+				updateErrs = append(updateErrs, fmt.Errorf("update project %q status: %w", option.ProjectTitle, err))
+			}
+		}
+		return errors.Join(updateErrs...)
 	}
 
 	if len(available) == 0 {
@@ -825,7 +836,7 @@ query($owner: String!, $repo: String!) {
 }`
 
 	var data struct {
-		Repository struct {
+		Repository *struct {
 			ProjectsV2 struct {
 				Nodes []githubProjectNode `json:"nodes"`
 			} `json:"projectsV2"`
@@ -833,6 +844,9 @@ query($owner: String!, $repo: String!) {
 	}
 	if err := doGitHubGraphQL(ctx, githubToken, query, map[string]any{"owner": owner, "repo": repo}, &data); err != nil {
 		return nil, err
+	}
+	if data.Repository == nil {
+		return nil, fmt.Errorf("GitHub repository %s/%s was not found or is not accessible", owner, repo)
 	}
 	return collectGitHubProjectStatusOptions(data.Repository.ProjectsV2.Nodes, ""), nil
 }
@@ -868,12 +882,12 @@ query($owner: String!, $repo: String!, $number: Int!) {
 }`
 
 	var data struct {
-		Repository struct {
-			Issue struct {
+		Repository *struct {
+			Issue *struct {
 				ProjectItems struct {
 					Nodes []struct {
-						ID      string            `json:"id"`
-						Project githubProjectNode `json:"project"`
+						ID      string             `json:"id"`
+						Project *githubProjectNode `json:"project"`
 					} `json:"nodes"`
 				} `json:"projectItems"`
 			} `json:"issue"`
@@ -882,10 +896,19 @@ query($owner: String!, $repo: String!, $number: Int!) {
 	if err := doGitHubGraphQL(ctx, githubToken, query, map[string]any{"owner": owner, "repo": repo, "number": issueNumber}, &data); err != nil {
 		return nil, err
 	}
+	if data.Repository == nil {
+		return nil, fmt.Errorf("GitHub repository %s/%s was not found or is not accessible", owner, repo)
+	}
+	if data.Repository.Issue == nil {
+		return nil, fmt.Errorf("GitHub issue %d in %s/%s was not found or is not accessible", issueNumber, owner, repo)
+	}
 
 	var options []githubProjectStatusOption
 	for _, item := range data.Repository.Issue.ProjectItems.Nodes {
-		options = append(options, collectGitHubProjectStatusOptions([]githubProjectNode{item.Project}, item.ID)...)
+		if item.Project == nil {
+			continue
+		}
+		options = append(options, collectGitHubProjectStatusOptions([]githubProjectNode{*item.Project}, item.ID)...)
 	}
 	return options, nil
 }
