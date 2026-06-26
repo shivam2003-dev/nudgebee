@@ -1218,7 +1218,7 @@ func handleCompletionApis(r *gin.Engine, tracer trace.Tracer, meter metric.Meter
 
 		logger.Info("api: processing request", "request", slog.AnyValue(request))
 
-		var prometheusChain = &agents.PrometheusAgent{}
+		prometheusChain := agents.NewPromqlAgent(request.AccountId)
 		// Check budget limits for tenant and account
 		if budget.CheckBudgetAndRespond(c, agentContext.GetSecurityContext().GetTenantId(), request.AccountId, budget.ModuleUserInvestigation, logger) {
 			return
@@ -1295,7 +1295,7 @@ func handleCompletionApis(r *gin.Engine, tracer trace.Tracer, meter metric.Meter
 			source = request.Source
 		}
 
-		var logChain = &agents.LokiAgent{}
+		logChain := agents.NewLogqlAgent(request.AccountId)
 		// Check budget limits for tenant and account
 		module := budget.ModuleUserInvestigation
 		if strings.HasPrefix(request.SessionId, events.SessionIdPrefixEvent) {

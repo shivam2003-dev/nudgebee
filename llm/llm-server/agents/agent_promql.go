@@ -25,9 +25,7 @@ func init() {
 	toolOutput := "Returns PromQL queries generated from your question."
 
 	core.RegisterNBAgentFactoryAsTool(PromqlAgentName, func(accountId string) (core.NBAgent, error) {
-		return &PromqlAgent{
-			accountId: accountId,
-		}, nil
+		return NewPromqlAgent(accountId), nil
 	}, toolDescription, toolInput, toolOutput)
 }
 
@@ -37,6 +35,12 @@ type PromqlAgent struct {
 	externalHosts       map[string]string
 	externalHostsCached bool
 	accountId           string
+}
+
+func NewPromqlAgent(accountId string) *PromqlAgent {
+	return &PromqlAgent{
+		accountId: accountId,
+	}
 }
 
 func (p *PromqlAgent) GetName() string {
@@ -231,6 +235,43 @@ func (l *PromqlAgent) GetMaxIterations() int {
 		return v
 	}
 	return 4
+}
+
+func (p *PromqlAgent) PostProcessResponse(ctx *security.RequestContext, request core.NBAgentRequest, resp core.NBAgentResponse) core.NBAgentResponse {
+	if len(resp.Response) == 0 {
+		return resp
+	}
+	if query, ok := extractPromqlResponseQuery(resp.Response[0]); ok {
+		resp.Response = []string{query}
+	}
+	return resp
+}
+
+func extractPromqlResponseQuery(response string) (string, bool) {
+	var result struct {
+		Promql any `json:"promql"`
+	}
+	if err := json.Unmarshal([]byte(response), &result); err != nil {
+		return "", false
+	}
+
+	switch v := result.Promql.(type) {
+	case string:
+		query := strings.TrimSpace(v)
+		return query, query != ""
+	case []any:
+		for _, item := range v {
+			query, ok := item.(string)
+			if !ok {
+				continue
+			}
+			query = strings.TrimSpace(query)
+			if query != "" {
+				return query, true
+			}
+		}
+	}
+	return "", false
 }
 
 func (l *PromqlAgent) CritiqueEnabled() bool {

@@ -16,9 +16,7 @@ func init() {
 	toolOutput := "The tool will return the loki query retrieved from your question."
 
 	core.RegisterNBAgentFactoryAsTool(LogqlAgentName, func(accountId string) (core.NBAgent, error) {
-		return &LogqlAgent{
-			accountId: accountId,
-		}, nil
+		return NewLogqlAgent(accountId), nil
 	}, toolDescription, toolInput, toolOutput)
 }
 
@@ -27,6 +25,12 @@ const LogqlAgentName = "logql_query_generator"
 type LogqlAgent struct {
 	accountId string
 	labels    []string
+}
+
+func NewLogqlAgent(accountId string) *LogqlAgent {
+	return &LogqlAgent{
+		accountId: accountId,
+	}
 }
 
 func (p LogqlAgent) GetName() string {

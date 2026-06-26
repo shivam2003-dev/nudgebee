@@ -527,6 +527,56 @@ const QueryModeSwitcher = ({
     }
   };
 
+  const applyGeneratedQueryResponse = (rawResponse, conversationId) => {
+    const response = typeof rawResponse === 'string' ? rawResponse.trim() : '';
+    if (!response) {
+      return;
+    }
+
+    const queryData = safeJSONParse(response);
+    let generatedQuery = response;
+    let llmResponse = response;
+
+    if (queryData) {
+      if (queryData.error) {
+        setHelperTextForLLM(queryData.error);
+        return;
+      }
+
+      if (typeof queryData.promql === 'string') {
+        generatedQuery = queryData.promql.trim();
+        llmResponse = generatedQuery;
+      } else if (typeof queryData.logql === 'string') {
+        generatedQuery = queryData.logql.trim();
+        llmResponse = generatedQuery;
+      } else if (typeof queryData.logql_query === 'string') {
+        generatedQuery = queryData.logql_query.trim();
+        llmResponse = generatedQuery;
+      } else if (typeof queryData.query === 'string') {
+        generatedQuery = queryData.query.trim();
+        llmResponse = generatedQuery;
+      } else {
+        const queries = Object.keys(queryData);
+        if (queries.length === 0) {
+          return;
+        }
+        generatedQuery = queries[0];
+        llmResponse = queryData[generatedQuery];
+      }
+    }
+
+    if (!generatedQuery) {
+      return;
+    }
+
+    const key = uuidv4();
+    setQuery(generatedQuery);
+    if (onQueryChange) {
+      onQueryChange({ query: generatedQuery, queryKeys: [key] });
+    }
+    sendConversationIdAndLLMResponseToParent(conversationId, llmResponse);
+  };
+
   const handleGenerateQuery = () => {
     setIsLoadingGenerateQuestionText(true);
     if (onAiLoadingChange) {
@@ -561,37 +611,14 @@ const QueryModeSwitcher = ({
               if (conv.status === 'COMPLETED') {
                 const result = extractQueryResultFromConversation(conv);
                 if (result) {
-                  const queryData = safeJSONParse(result.response);
-                  if (queryData) {
-                    const queries = Object.keys(queryData);
-                    if (queries.length > 0) {
-                      const key = uuidv4();
-                      setQuery(queries[0]);
-                      if (onQueryChange) {
-                        onQueryChange({ query: queries[0], queryKeys: [key] });
-                      }
-                      sendConversationIdAndLLMResponseToParent(result.conversationId, queryData[queries[0]]);
-                    }
-                  }
+                  applyGeneratedQueryResponse(result.response, result.conversationId);
                 }
               } else {
                 snackbar.error('Query generation failed');
               }
             });
           } else {
-            const query = data?.response[0] ?? '{}';
-            const queryData = safeJSONParse(query);
-            if (queryData) {
-              const queries = Object.keys(queryData);
-              if (queries.length > 0) {
-                const key = uuidv4();
-                setQuery(queries[0]);
-                if (onQueryChange) {
-                  onQueryChange({ query: queries[0], queryKeys: [key] });
-                }
-                sendConversationIdAndLLMResponseToParent(data?.conversation_id ?? '', queryData[queries[0]]);
-              }
-            }
+            applyGeneratedQueryResponse(data?.response[0], data?.conversation_id ?? '');
             setIsLoadingGenerateQuestionText(false);
             if (onAiLoadingChange) {
               onAiLoadingChange(false);
@@ -631,37 +658,14 @@ const QueryModeSwitcher = ({
               if (conv.status === 'COMPLETED') {
                 const result = extractQueryResultFromConversation(conv);
                 if (result) {
-                  const queryData = safeJSONParse(result.response);
-                  if (queryData) {
-                    const queries = Object.keys(queryData);
-                    if (queries.length > 0) {
-                      const key = uuidv4();
-                      setQuery(queries[0]);
-                      if (onQueryChange) {
-                        onQueryChange({ query: queries[0], queryKeys: [key] });
-                      }
-                      sendConversationIdAndLLMResponseToParent(result.conversationId, queryData[queries[0]]);
-                    }
-                  }
+                  applyGeneratedQueryResponse(result.response, result.conversationId);
                 }
               } else {
                 snackbar.error('Query generation failed');
               }
             });
           } else {
-            const query = data?.response[0] ?? '{}';
-            const queryData = safeJSONParse(query);
-            if (queryData) {
-              const queries = Object.keys(queryData);
-              if (queries.length > 0) {
-                const key = uuidv4();
-                setQuery(queries[0]);
-                if (onQueryChange) {
-                  onQueryChange({ query: queries[0], queryKeys: [key] });
-                }
-                sendConversationIdAndLLMResponseToParent(data?.conversation_id ?? '', queryData[queries[0]]);
-              }
-            }
+            applyGeneratedQueryResponse(data?.response[0], data?.conversation_id ?? '');
             setIsLoadingGenerateQuestionText(false);
             if (onAiLoadingChange) {
               onAiLoadingChange(false);

@@ -125,3 +125,33 @@ func TestPromqlAgent_UpdateExecutorLlmResponse_InvalidFunction(t *testing.T) {
 		assert.Equal(t, data, finished.Data)
 	})
 }
+
+func TestPromqlAgent_PostProcessResponseReturnsBareQuery(t *testing.T) {
+	agent := &PromqlAgent{}
+	query := `histogram_quantile(0.99, sum(rate(container_http_requests_duration_seconds_total_bucket{destination_workload_name="my-service", destination_workload_namespace="my-ns"}[5m])) by (le))`
+	wrappedResponse, err := json.Marshal(map[string]string{"promql": query})
+	assert.NoError(t, err)
+	resp := core.NBAgentResponse{
+		Response: []string{string(wrappedResponse)},
+	}
+
+	processed := agent.PostProcessResponse(nil, core.NBAgentRequest{
+		Query: "give me a query for p99 latency for my-service in my-ns",
+	}, resp)
+
+	assert.Equal(t, []string{query}, processed.Response)
+	assert.NotContains(t, processed.Response[0], "```")
+	assert.NotContains(t, processed.Response[0], "promql")
+	assert.NotContains(t, processed.Response[0], "###")
+}
+
+func TestPromqlAgent_PostProcessResponseKeepsPlainErrors(t *testing.T) {
+	agent := &PromqlAgent{}
+	resp := core.NBAgentResponse{
+		Response: []string{"promql_query: generated query is invalid"},
+	}
+
+	processed := agent.PostProcessResponse(nil, core.NBAgentRequest{}, resp)
+
+	assert.Equal(t, resp.Response, processed.Response)
+}
