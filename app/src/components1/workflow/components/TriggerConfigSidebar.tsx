@@ -12,6 +12,11 @@ import apiIntegrations from '@api1/integrations';
 import homeApi from '@api1/home';
 import { titleCaseForAggregationKey } from 'src/utils/common';
 import CopyableText from '@components1/common/CopyableText';
+import {
+  getOptimizationCategoryOptions,
+  getOptimizationSourceType,
+  type WorkflowAccountOption,
+} from '@components1/workflow/utils/optimizationTriggerOptions';
 import { STRUCTURED_FILTER_FIELDS, buildFilterExpression, parseFilterExpression } from '../utils/eventFilter';
 import { DOCS_BASE_URL, docsUrl } from '@lib/externalUrls';
 
@@ -242,7 +247,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
   const [optimizationCategories, setOptimizationCategories] = useState<string[]>([]);
   const [optimizationRuleNames, setOptimizationRuleNames] = useState<string[]>([]);
   const [optimizationClusters, setOptimizationClusters] = useState<string[]>([]);
-  const [k8sClusterOptions, setK8sClusterOptions] = useState<{ label: string; value: string }[]>([]);
+  const [k8sClusterOptions, setK8sClusterOptions] = useState<WorkflowAccountOption[]>([]);
   const [isLoadingK8sClusters, setIsLoadingK8sClusters] = useState(false);
 
   // Buffered trigger-config state. Edits go into `pendingTriggerConfig` instead
@@ -473,6 +478,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
           label: a.account_name,
           value: a.id,
           cloud_provider: a.cloud_provider,
+          account_type: a.account_type,
         }));
       setK8sClusterOptions(options);
     } catch (error) {
@@ -854,16 +860,6 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
     }
   };
 
-  const OPTIMIZATION_CATEGORY_OPTIONS = [
-    { label: 'Pod Right Sizing', value: 'PodRightSizing' },
-    { label: 'Right Sizing', value: 'RightSizing' },
-    { label: 'K8s Instance Recommendation', value: 'K8sInstanceRecommendation' },
-    { label: 'K8s Spot Recommendation', value: 'K8sSpotRecommendation' },
-    { label: 'Configuration', value: 'Configuration' },
-    { label: 'Security', value: 'Security' },
-    { label: 'K8s Missing Attribute', value: 'K8sMissingAttribute' },
-  ];
-
   const OPTIMIZATION_RULE_NAME_OPTIONS = [
     { label: 'Vertical Rightsize', value: 'vertical_rightsize' },
     { label: 'Horizontal Rightsize', value: 'horizontal_rightsize' },
@@ -897,6 +893,9 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
     commitTriggerConfig(triggerConfig);
   };
 
+  const optimizationSourceType = getOptimizationSourceType(optimizationClusters[0] || '', k8sClusterOptions);
+  const optimizationCategoryOptions = getOptimizationCategoryOptions(optimizationSourceType, optimizationCategories);
+
   const renderOptimizationConfig = () => (
     <FormCard
       title='Optimization Trigger Configuration'
@@ -906,8 +905,8 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
       columns={1}
     >
       <FormField
-        label='Cluster'
-        description='Filter by Kubernetes cluster (optional)'
+        label='Source'
+        description='Filter by cloud account or Kubernetes cluster (optional)'
         value={optimizationClusters[0] || ''}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
           const value = e.target.value || '';
@@ -915,7 +914,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
           setOptimizationClusters(newClusters);
           updateOptimizationTrigger({ clusters: newClusters });
         }}
-        placeholder='Select cluster'
+        placeholder='Select source'
         required={false}
         error=''
         fieldType='dropdown'
@@ -945,7 +944,7 @@ const TriggerConfigSidebar: React.FC<TriggerConfigSidebarProps> = ({
         required={false}
         error=''
         fieldType='dropdown'
-        options={OPTIMIZATION_CATEGORY_OPTIONS}
+        options={optimizationCategoryOptions}
         onSelect={() => {}}
         customRender={null}
         limitTags={0}
