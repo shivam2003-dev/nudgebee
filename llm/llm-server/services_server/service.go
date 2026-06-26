@@ -31,22 +31,19 @@ func ExecuteQuery(serviceRequest ServicesQueryRequest) (map[string]string, error
 		return response, fmt.Errorf("services: executequery, unable to process request: %v", err)
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", resp.Body)
-	}
+	defer closeResponseBody(resp.Body, "services_server")
 
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", resp.Body)
-	}
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			slog.Info("services_server: failed to close response body", "error", err)
-		}
-	}()
 	jsonBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return response, err
+	}
+
+	if resp.StatusCode == 401 {
+		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
+	}
+
+	if resp.StatusCode == 500 {
+		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
 	}
 
 	var responseData map[string]any
@@ -111,22 +108,19 @@ func ExecuteScanImageQuery(scanImageRequest ScanImageServiceRequest) (map[string
 		return response, fmt.Errorf("services: scanimage, unable to process request: %v", err)
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", resp.Body)
-	}
+	defer closeResponseBody(resp.Body, "services_server")
 
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", resp.Body)
-	}
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			slog.Info("services_server: failed to close response body", "error", err)
-		}
-	}()
 	jsonBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return response, err
+	}
+
+	if resp.StatusCode == 401 {
+		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
+	}
+
+	if resp.StatusCode == 500 {
+		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
 	}
 
 	var responseData RecommendationApplyResponse
@@ -157,22 +151,19 @@ func ExecuteScanCisQuery(scanCisRequest ScanCisServiceRequest) (map[string]strin
 		return response, fmt.Errorf("services: scancis, unable to process request: %v", err)
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", resp.Body)
-	}
+	defer closeResponseBody(resp.Body, "services")
 
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", resp.Body)
-	}
-
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			slog.Info("services: failed to close response body", "error", err)
-		}
-	}()
 	jsonBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return response, err
+	}
+
+	if resp.StatusCode == 401 {
+		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
+	}
+
+	if resp.StatusCode == 500 {
+		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
 	}
 
 	var responseData ScanCisServiceResponse
@@ -188,6 +179,15 @@ func ExecuteScanCisQuery(scanCisRequest ScanCisServiceRequest) (map[string]strin
 	}
 	response["result"] = string(dataJson)
 	return response, nil
+}
+
+func closeResponseBody(body io.Closer, logPrefix string) {
+	if body == nil {
+		return
+	}
+	if err := body.Close(); err != nil {
+		slog.Info(logPrefix+": failed to close response body", "error", err)
+	}
 }
 
 func GetServiceDependencyGraph(ctx security.RequestContext, accountId, namespace, workload string) (GetServiceDependencyGraphResponse, error) {
