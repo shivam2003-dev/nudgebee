@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"net/http"
 	"nudgebee/llm/common"
 	"nudgebee/llm/config"
 	"nudgebee/llm/relay"
@@ -31,19 +32,13 @@ func ExecuteQuery(serviceRequest ServicesQueryRequest) (map[string]string, error
 		return response, fmt.Errorf("services: executequery, unable to process request: %v", err)
 	}
 
-	defer closeResponseBody(resp.Body, "services_server")
-
-	jsonBody, err := io.ReadAll(resp.Body)
+	jsonBody, err := readAndCloseServicesResponseBody(resp, "services_server")
 	if err != nil {
 		return response, err
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
-	}
-
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
+	if err := servicesHTTPStatusError("executequery", resp.StatusCode, jsonBody); err != nil {
+		return response, err
 	}
 
 	var responseData map[string]any
@@ -108,19 +103,13 @@ func ExecuteScanImageQuery(scanImageRequest ScanImageServiceRequest) (map[string
 		return response, fmt.Errorf("services: scanimage, unable to process request: %v", err)
 	}
 
-	defer closeResponseBody(resp.Body, "services_server")
-
-	jsonBody, err := io.ReadAll(resp.Body)
+	jsonBody, err := readAndCloseServicesResponseBody(resp, "services_server")
 	if err != nil {
 		return response, err
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
-	}
-
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
+	if err := servicesHTTPStatusError("scanimage", resp.StatusCode, jsonBody); err != nil {
+		return response, err
 	}
 
 	var responseData RecommendationApplyResponse
@@ -151,19 +140,13 @@ func ExecuteScanCisQuery(scanCisRequest ScanCisServiceRequest) (map[string]strin
 		return response, fmt.Errorf("services: scancis, unable to process request: %v", err)
 	}
 
-	defer closeResponseBody(resp.Body, "services")
-
-	jsonBody, err := io.ReadAll(resp.Body)
+	jsonBody, err := readAndCloseServicesResponseBody(resp, "services_server")
 	if err != nil {
 		return response, err
 	}
 
-	if resp.StatusCode == 401 {
-		return response, fmt.Errorf("unauthorized: %v", string(jsonBody))
-	}
-
-	if resp.StatusCode == 500 {
-		return response, fmt.Errorf("internal Server Error from Services Server, %v", string(jsonBody))
+	if err := servicesHTTPStatusError("scancis", resp.StatusCode, jsonBody); err != nil {
+		return response, err
 	}
 
 	var responseData ScanCisServiceResponse
@@ -179,6 +162,37 @@ func ExecuteScanCisQuery(scanCisRequest ScanCisServiceRequest) (map[string]strin
 	}
 	response["result"] = string(dataJson)
 	return response, nil
+}
+
+func readAndCloseServicesResponseBody(resp *http.Response, logPrefix string) ([]byte, error) {
+	if resp == nil || resp.Body == nil {
+		return nil, errors.New("services: response body is empty")
+	}
+	defer closeResponseBody(resp.Body, logPrefix)
+	return io.ReadAll(resp.Body)
+}
+
+func servicesHTTPStatusError(operation string, statusCode int, body []byte) error {
+	if statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices {
+		return nil
+	}
+
+	bodyText := strings.TrimSpace(string(body))
+	if statusCode == http.StatusUnauthorized {
+		if bodyText == "" {
+			return errors.New("unauthorized")
+		}
+		return fmt.Errorf("unauthorized: %s", bodyText)
+	}
+
+	if statusCode >= http.StatusInternalServerError {
+		return fmt.Errorf("services: %s failed with status %d", operation, statusCode)
+	}
+
+	if bodyText == "" {
+		return fmt.Errorf("services: %s failed with status %d", operation, statusCode)
+	}
+	return fmt.Errorf("services: %s failed with status %d: %s", operation, statusCode, bodyText)
 }
 
 func closeResponseBody(body io.Closer, logPrefix string) {
