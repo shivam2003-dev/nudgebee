@@ -222,7 +222,8 @@ const ServiceRecommendations: React.FC<ServiceRecommendationsProps> = ({ account
             component: (
               <Box display='flex' justifyContent='flex-end' flexDirection='row' alignItems='center' gap={ds.space[1]}>
                 <DsDropdownMenu
-                  align='end'
+                  align='start'
+                  side='left'
                   size='sm'
                   items={menuItems}
                   trigger={<DsButton tone='ghost' size='xs' composition='icon-only' aria-label='More actions' icon={<MoreVertIcon />} />}

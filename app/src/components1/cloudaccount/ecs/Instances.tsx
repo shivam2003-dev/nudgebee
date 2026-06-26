@@ -184,7 +184,8 @@ export const ECSTasks = (props: {
               MENU_ITEMS && MENU_ITEMS.length > 0 ? (
                 <Box display={'flex'} justifyContent={'flex-end'} gap={ds.space[1]}>
                   <DsDropdownMenu
-                    align='end'
+                    align='start'
+                    side='left'
                     size='sm'
                     items={MENU_ITEMS.map((m) => ({
                       id: `ecs-task-action-${item.resourse_id}-${m.id}`,
@@ -417,7 +418,8 @@ export const ECSServices = (props: {
               menuItems && menuItems.length > 0 ? (
                 <Box display={'flex'} justifyContent={'flex-end'} gap={ds.space[1]}>
                   <DsDropdownMenu
-                    align='end'
+                    align='start'
+                    side='left'
                     size='sm'
                     items={menuItems.map((m: any) => ({
                       id: `ecs-service-action-${item.resourse_id}-${m.id}`,
@@ -1031,7 +1033,8 @@ export const ECSClusters = (props: {
               MENU_ITEMS && MENU_ITEMS.length > 0 ? (
                 <Box display={'flex'} justifyContent={'flex-end'} gap={ds.space[1]}>
                   <DsDropdownMenu
-                    align='end'
+                    align='start'
+                    side='left'
                     size='sm'
                     items={MENU_ITEMS.map((m) => ({
                       id: `ecs-cluster-action-${item.resourse_id}-${m.id}`,

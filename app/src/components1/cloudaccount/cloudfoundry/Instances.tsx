@@ -674,7 +674,8 @@ const CFInstancesView = (props: {
             component: (
               <Box display='flex' flexDirection='row' alignItems='center' gap={ds.space[1]}>
                 <DsDropdownMenu
-                  align='end'
+                  align='start'
+                  side='left'
                   size='sm'
                   items={MENU_ITEMS.map((m) => ({
                     id: `cf-action-${item.resourse_id}-${m.id}`,

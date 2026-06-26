@@ -39,6 +39,8 @@ function resolveIconNode(item) {
  *   lightIcon?: string,
  *   className?: string,
  *   menuWidth?: string | number,
+ *   align?: 'start' | 'end',
+ *   side?: 'bottom' | 'top' | 'left' | 'right',
  * }} props
  */
 const ThreeDotsMenu = ({
@@ -47,6 +49,8 @@ const ThreeDotsMenu = ({
   menuItems = [],
   data,
   menuWidth,
+  align = 'end',
+  side = 'bottom',
   sx: _sx = {},
   lightIcon: _lightIcon = '',
   className: _className = '',
@@ -66,8 +70,8 @@ const ThreeDotsMenu = ({
 
   return (
     <DropdownMenu
-      align='end'
-      side='bottom'
+      align={align}
+      side={side}
       size='sm'
       minWidth={menuWidth ?? 160}
       items={dsItems}
@@ -88,6 +92,8 @@ ThreeDotsMenu.propTypes = {
   lightIcon: PropTypes.string,
   className: PropTypes.string,
   menuWidth: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  align: PropTypes.oneOf(['start', 'end']),
+  side: PropTypes.oneOf(['bottom', 'top', 'left', 'right']),
 };
 
 export default ThreeDotsMenu;

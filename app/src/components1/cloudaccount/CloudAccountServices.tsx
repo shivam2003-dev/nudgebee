@@ -318,7 +318,7 @@ const CloudAccountServices = (props: {
       data.push({
         component: (
           <Box display={'flex'} justifyContent={'flex-end'} alignItems={'center'}>
-            <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} />
+            <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} align='start' side='left' />
           </Box>
         ),
       });

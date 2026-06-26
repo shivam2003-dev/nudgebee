@@ -130,7 +130,7 @@ const CloudAccountLogs = (props: { accountId: string | undefined; serviceName: s
           data.push({
             component: (
               <Box display={'flex'} flexDirection={'row'} alignItems={'right'} gap={'4px'}>
-                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} />
+                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} align='start' side='left' />
               </Box>
             ),
           });

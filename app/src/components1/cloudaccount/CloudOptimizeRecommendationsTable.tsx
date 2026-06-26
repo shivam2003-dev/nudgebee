@@ -527,7 +527,8 @@ const CloudOptimizeRecommendationsTable = (props: {
             </span>
           </DsTooltip>
           <DsDropdownMenu
-            align='end'
+            align='start'
+            side='left'
             size='sm'
             items={menuItemsConfig.map((m: any) => ({
               id: `optimize-action-${item.id}-${m.id}`,

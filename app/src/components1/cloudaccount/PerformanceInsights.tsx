@@ -271,7 +271,8 @@ const TopQueriesTable = ({
             </span>
           </Tooltip>
           <DsDropdownMenu
-            align='end'
+            align='start'
+            side='left'
             size='sm'
             items={dsMenuItems}
             trigger={<DsButton tone='ghost' size='xs' composition='icon-only' aria-label='More actions' icon={<MoreVertIcon />} />}

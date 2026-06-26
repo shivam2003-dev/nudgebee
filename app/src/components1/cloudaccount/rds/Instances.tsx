@@ -848,7 +848,8 @@ const InstancesView = (props: {
               menuItems && menuItems.length > 0 ? (
                 <Box display={'flex'} flexDirection={'row'} alignItems={'center'} gap={ds.space[1]}>
                   <DsDropdownMenu
-                    align='end'
+                    align='start'
+                    side='left'
                     size='sm'
                     items={menuItems.map((m: any) => ({
                       id: `rds-action-${item.resourse_id}-${m.id}`,

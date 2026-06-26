@@ -26,6 +26,32 @@ function renderItemIcon(item) {
   return null;
 }
 
+function deriveAnchorOrigin(side, align) {
+  if (side === 'top') {
+    return { vertical: 'top', horizontal: align === 'end' ? 'right' : 'left' };
+  }
+  if (side === 'left') {
+    return { vertical: align === 'end' ? 'bottom' : 'top', horizontal: 'left' };
+  }
+  if (side === 'right') {
+    return { vertical: align === 'end' ? 'bottom' : 'top', horizontal: 'right' };
+  }
+  return { vertical: 'bottom', horizontal: align === 'end' ? 'right' : 'left' };
+}
+
+function deriveTransformOrigin(side, align) {
+  if (side === 'top') {
+    return { vertical: 'bottom', horizontal: align === 'end' ? 'right' : 'left' };
+  }
+  if (side === 'left') {
+    return { vertical: align === 'end' ? 'bottom' : 'top', horizontal: 'right' };
+  }
+  if (side === 'right') {
+    return { vertical: align === 'end' ? 'bottom' : 'top', horizontal: 'left' };
+  }
+  return { vertical: 'top', horizontal: align === 'end' ? 'right' : 'left' };
+}
+
 /**
  * @param {{
  *   id?: string,
@@ -36,10 +62,22 @@ function renderItemIcon(item) {
  *   lightIcon?: string,
  *   className?: string,
  *   menuWidth?: string | number,
+ *   align?: 'start' | 'end',
+ *   side?: 'bottom' | 'top' | 'left' | 'right',
  * }} props
  */
-
-const ThreeDotsMenu = ({ id, sx = {}, onMenuClick, menuItems = [], data, lightIcon = '', className = '', menuWidth }) => {
+const ThreeDotsMenu = ({
+  id,
+  sx = {},
+  onMenuClick,
+  menuItems = [],
+  data,
+  lightIcon = '',
+  className = '',
+  menuWidth,
+  align = 'end',
+  side = 'bottom',
+}) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const [submenuOpen, setSubmenuOpen] = React.useState({});
 
@@ -72,6 +110,8 @@ const ThreeDotsMenu = ({ id, sx = {}, onMenuClick, menuItems = [], data, lightIc
         keepMounted
         open={Boolean(anchorEl)}
         onClose={handleClose}
+        anchorOrigin={deriveAnchorOrigin(side, align)}
+        transformOrigin={deriveTransformOrigin(side, align)}
         PaperProps={{ sx: { ...(menuWidth && { width: menuWidth, minWidth: menuWidth }) } }}
       >
         {menuItems &&
@@ -146,6 +186,8 @@ ThreeDotsMenu.propTypes = {
   lightIcon: PropTypes.string,
   className: PropTypes.string,
   menuWidth: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  align: PropTypes.oneOf(['start', 'end']),
+  side: PropTypes.oneOf(['bottom', 'top', 'left', 'right']),
 };
 
 export default ThreeDotsMenu;

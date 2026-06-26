@@ -113,7 +113,7 @@ const CloudAccountMetrics = (props: { accountId: string | undefined; heading: st
           data.push({
             component: (
               <Box display={'flex'} flexDirection={'row'} alignItems={'center'} gap={ds.space[1]}>
-                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} />
+                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} align='start' side='left' />
               </Box>
             ),
           });

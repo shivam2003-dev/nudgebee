@@ -161,7 +161,8 @@ const CloudAccountTools = (props: { accountId: string | undefined; serviceName: 
             component: (
               <Box display='flex' justifyContent='flex-end' flexDirection='row' alignItems='center' gap={ds.space[1]}>
                 <DsDropdownMenu
-                  align='end'
+                  align='start'
+                  side='left'
                   size='sm'
                   items={MENU_ITEMS}
                   trigger={<DsButton tone='ghost' size='xs' composition='icon-only' aria-label='More actions' icon={<MoreVertIcon />} />}

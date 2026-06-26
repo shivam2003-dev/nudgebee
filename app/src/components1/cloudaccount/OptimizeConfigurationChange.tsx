@@ -297,7 +297,14 @@ const OptimizeConfigurationChange = (props: {
           data.push({
             component: (
               <Box display={'flex'} justifyContent={'flex-end'}>
-                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={getMenuItems(item, props.accountAccess)} data={item} onMenuClick={onMenuClick} />
+                <ThreeDotsMenu
+                  sx={{ ...action.primary }}
+                  menuItems={getMenuItems(item, props.accountAccess)}
+                  data={item}
+                  onMenuClick={onMenuClick}
+                  align='start'
+                  side='left'
+                />
               </Box>
             ),
           });

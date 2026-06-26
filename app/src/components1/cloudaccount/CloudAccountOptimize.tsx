@@ -104,7 +104,7 @@ const CloudAccountOptimize = (props: { accountId: string | undefined; heading: s
           data.push({
             component: (
               <Box display={'flex'} flexDirection={'row'} alignItems={'center'} gap={'4px'}>
-                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} />
+                <ThreeDotsMenu sx={{ ...action.primary }} menuItems={MENU_ITEMS} data={item} onMenuClick={onMenuClick} align='start' side='left' />
               </Box>
             ),
           });

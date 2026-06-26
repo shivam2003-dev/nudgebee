@@ -415,6 +415,8 @@ const CloudAccountEvents = (props: {
             menuItems={getMenuItems(item, ticketReferenceMap.has(item.fingerprint))}
             data={item}
             onMenuClick={onMenuClick}
+            align='start'
+            side='left'
           />
         </Box>
       ),

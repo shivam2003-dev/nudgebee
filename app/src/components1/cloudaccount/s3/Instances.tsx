@@ -134,7 +134,8 @@ const InstancesView = (props: {
             component: writeAccess ? (
               <Box display={'flex'} justifyContent={'flex-end'} gap={ds.space[1]}>
                 <DsDropdownMenu
-                  align='end'
+                  align='start'
+                  side='left'
                   size='sm'
                   items={[
                     {

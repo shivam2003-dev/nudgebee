@@ -199,7 +199,16 @@ const CloudAccountAlertManager: React.FC<CloudAccountAlertManagerProps> = ({ acc
               text: '--',
             },
             {
-              component: <ThreeDotsMenu sx={{ ...action.primary }} onMenuClick={onMenuClick} data={item} menuItems={getMenuItems(item)} />,
+              component: (
+                <ThreeDotsMenu
+                  sx={{ ...action.primary }}
+                  onMenuClick={onMenuClick}
+                  data={item}
+                  menuItems={getMenuItems(item)}
+                  align='start'
+                  side='left'
+                />
+              ),
             },
           ];
         });
