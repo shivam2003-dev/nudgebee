@@ -4,9 +4,14 @@ import (
 	"fmt"
 	"testing"
 
+	"nudgebee/llm/common"
 	"nudgebee/llm/config"
+	"nudgebee/llm/events"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // saveAndRestoreConfig saves the current config and returns a cleanup function
@@ -52,6 +57,43 @@ func TestValidModules(t *testing.T) {
 		assert.True(t, validModules[module], fmt.Sprintf("%s should be a valid module", module))
 	}
 	assert.GreaterOrEqual(t, len(validModules), len(expectedModules))
+}
+
+func TestBudgetUsageFiltersPartitionEventAndUserInvestigation(t *testing.T) {
+	assert.Contains(t, moduleQueryFilters[ModuleInvestigation], "c.session_id LIKE '"+events.SessionIdPrefixEvent+"%'")
+	assert.Contains(t, moduleQueryFilters[ModuleUserInvestigation], "c.session_id NOT LIKE '"+events.SessionIdPrefixEvent+"%'")
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, db.Close())
+		require.NoError(t, mock.ExpectationsWereMet())
+	}()
+
+	dbManager := &common.DatabaseManager{Db: sqlx.NewDb(db, "postgres")}
+
+	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*c\\.session_id NOT LIKE 'event-%'.*").
+		WithArgs("account-1").
+		WillReturnRows(sqlmock.NewRows([]string{"total_cost"}).AddRow(2.5))
+	userCost, err := GetAccountTokenUsage(dbManager, "account-1", ModuleUserInvestigation)
+	require.NoError(t, err)
+	assert.Equal(t, 2.5, userCost)
+
+	mock.ExpectQuery("(?s).*FROM llm_conversations c.*c\\.session_id NOT LIKE 'event-%'.*").
+		WithArgs("account-1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(7))
+	userCount, err := GetAccountConversationCount(dbManager, "account-1", ModuleUserInvestigation)
+	require.NoError(t, err)
+	assert.Equal(t, 7, userCount)
+
+	mock.ExpectQuery("(?s).*FROM llm_conversation_token_usage t.*c\\.session_id LIKE 'event-%'.*").
+		WithArgs("account-1").
+		WillReturnRows(sqlmock.NewRows([]string{"total_cost"}).AddRow(1.25))
+	eventCost, err := GetAccountTokenUsage(dbManager, "account-1", ModuleInvestigation)
+	require.NoError(t, err)
+	assert.Equal(t, 1.25, eventCost)
+
+	mock.ExpectClose()
 }
 
 // TestValidEntityTypes tests the entity type validation

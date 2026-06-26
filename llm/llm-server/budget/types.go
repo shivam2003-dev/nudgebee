@@ -21,7 +21,7 @@ var validModules = map[string]bool{
 // This is a whitelist approach to prevent SQL injection
 var moduleQueryFilters = map[string]string{
 	ModuleInvestigation:     " AND c.session_id LIKE '" + events.SessionIdPrefixEvent + "%'",
-	ModuleUserInvestigation: "", // No additional filter for user investigation
+	ModuleUserInvestigation: " AND c.session_id NOT LIKE '" + events.SessionIdPrefixEvent + "%'",
 }
 
 // Entity type constants
